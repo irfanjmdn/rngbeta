@@ -2758,31 +2758,6 @@ a.meta-tag.source-tag:hover strong {
   animation: auraDrift 14s ease-in-out infinite alternate-reverse;
 }
 
-/* Momentary Shockwave Flash upon Mechanical Brake Latch */
-.aura-shockwave {
-  position: absolute;
-  top: 35%;
-  left: 50%;
-  width: 440px;
-  height: 440px;
-  margin-left: -220px;
-  margin-top: -220px;
-  border-radius: 50%;
-  filter: blur(55px);
-  background: radial-gradient(
-    circle,
-    var(--tier-glow-color, rgba(29, 185, 84, 0.38)) 0%,
-    transparent 70%
-  );
-  opacity: 0;
-  pointer-events: none;
-  transform: scale(0.6);
-}
-
-.ambient-aura-layer.shockwave-flash .aura-shockwave {
-  animation: auraShockwaveBurst 0.45s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
-}
-
 /* Kinetic Motion when Reel is Spinning */
 .ambient-aura-layer.is-spinning .aura-orb-primary {
   transform: scaleX(1.42) scaleY(0.82);
@@ -2816,21 +2791,6 @@ a.meta-tag.source-tag:hover strong {
   }
 }
 
-@keyframes auraShockwaveBurst {
-  0% {
-    opacity: 0.85;
-    transform: scale(0.7);
-  }
-  50% {
-    opacity: 0.55;
-    transform: scale(1.45);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(2.0);
-  }
-}
-
 /* Radial Audio Shockwave Visualizer Canvas */
 .audio-visualizer-canvas {
   position: absolute;
@@ -2847,7 +2807,6 @@ a.meta-tag.source-tag:hover strong {
   }
   .aura-orb-primary,
   .aura-orb-secondary,
-  .aura-shockwave,
   .ambient-aura-layer.is-spinning .aura-orb-primary,
   .ambient-aura-layer.is-spinning .aura-orb-secondary {
     animation: none !important;

@@ -42,8 +42,6 @@
       lineWidth: 8,
       blur: 16,
       initialOpacity: 0.58,
-      hasCore: false,
-      hasEcho: false,
       emberCount: 0,
     },
     common: {
@@ -53,8 +51,6 @@
       lineWidth: 5,
       blur: 14,
       initialOpacity: 0.38,
-      hasCore: false,
-      hasEcho: false,
       emberCount: 0,
     },
     uncommon: {
@@ -64,8 +60,6 @@
       lineWidth: 7,
       blur: 16,
       initialOpacity: 0.52,
-      hasCore: false,
-      hasEcho: false,
       emberCount: 0,
     },
     rare: {
@@ -75,8 +69,6 @@
       lineWidth: 10,
       blur: 18,
       initialOpacity: 0.70,
-      hasCore: false,
-      hasEcho: true,
       emberCount: 3,
     },
     epic: {
@@ -86,8 +78,6 @@
       lineWidth: 14,
       blur: 21,
       initialOpacity: 0.85,
-      hasCore: true,
-      hasEcho: true,
       emberCount: 6,
     },
     legendary: {
@@ -97,8 +87,6 @@
       lineWidth: 18,
       blur: 24,
       initialOpacity: 0.95,
-      hasCore: true,
-      hasEcho: true,
       emberCount: 10,
     },
     mythic: {
@@ -108,8 +96,6 @@
       lineWidth: 22,
       blur: 28,
       initialOpacity: 1.0,
-      hasCore: true,
-      hasEcho: true,
       emberCount: 15,
     },
   };
@@ -118,7 +104,8 @@
     const tier = $activeWinnerCard?.rarityTier || 'default';
     const cfg = TIER_VISUALIZER_CONFIG[tier] || TIER_VISUALIZER_CONFIG.default;
 
-    rings.push({
+    // Enforce strictly one single ring at a time
+    rings = [{
       radius: 14,
       maxRadius: cfg.maxRadius * intensity,
       speed: cfg.ringSpeed * (0.9 + intensity * 0.1),
@@ -127,26 +114,10 @@
       lineWidth: cfg.lineWidth,
       blur: cfg.blur,
       color: cfg.color,
-      hasCore: cfg.hasCore,
-    });
-
-    if (cfg.hasEcho) {
-      setTimeout(() => {
-        rings.push({
-          radius: 14,
-          maxRadius: cfg.maxRadius * 0.8 * intensity,
-          speed: cfg.ringSpeed * 0.82,
-          initialOpacity: cfg.initialOpacity * 0.65 * intensity,
-          opacity: cfg.initialOpacity * 0.65 * intensity,
-          lineWidth: Math.max(4, Math.round(cfg.lineWidth * 0.7)),
-          blur: Math.round(cfg.blur * 0.85),
-          color: cfg.color,
-          hasCore: false,
-        });
-      }, 70);
-    }
+    }];
 
     if (cfg.emberCount > 0) {
+      embers = [];
       const count = Math.round(cfg.emberCount * intensity);
       for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
@@ -203,15 +174,6 @@
       ctx.strokeStyle = `rgba(${r.color[0]}, ${r.color[1]}, ${r.color[2]}, ${r.opacity.toFixed(3)})`;
       ctx.lineWidth = r.lineWidth;
       ctx.stroke();
-
-      if (r.hasCore) {
-        ctx.filter = `blur(${Math.round(r.blur * 0.4)}px)`;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, r.radius, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${(r.opacity * 0.75).toFixed(3)})`;
-        ctx.lineWidth = Math.max(3, Math.round(r.lineWidth * 0.25));
-        ctx.stroke();
-      }
       ctx.restore();
     }
 
@@ -470,20 +432,14 @@
     },
   };
 
-  let isShockwaveActive = false;
-
   $: currentAura = $activeWinnerCard
     ? (TIER_AURA_COLORS[$activeWinnerCard.rarityTier] || TIER_AURA_COLORS.default)
     : TIER_AURA_COLORS.default;
 
   function handleRollComplete(winner, isNew) {
     activeArenaTrack.set(winner);
-    isShockwaveActive = true;
     spawnShockwave(1.0);
     ensureVisualizerLoop();
-    setTimeout(() => {
-      isShockwaveActive = false;
-    }, 550);
     if (winner.preview_url) {
       playArenaAudio(winner.preview_url);
     }
@@ -525,13 +481,12 @@
   <div class="game-viewport {$isCrateReady ? '' : 'hidden'}" id="gameArenaScreen">
     <!-- Ambient Reactive Aura Layer -->
     <div
-      class="ambient-aura-layer {$isSpinning ? 'is-spinning' : ''} {isShockwaveActive ? 'shockwave-flash' : ''}"
+      class="ambient-aura-layer {$isSpinning ? 'is-spinning' : ''}"
       aria-hidden="true"
       style="--tier-glow-color: {currentAura.glow}; --tier-glow-accent: {currentAura.accent};"
     >
       <div class="aura-orb aura-orb-primary"></div>
       <div class="aura-orb aura-orb-secondary"></div>
-      <div class="aura-shockwave"></div>
     </div>
 
     <!-- Audio-Reactive Radial Shockwave Canvas -->
