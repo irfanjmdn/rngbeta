@@ -216,8 +216,49 @@
     }
   }
 
+  const TIER_AURA_COLORS = {
+    default: {
+      glow: 'rgba(29, 185, 84, 0.16)',
+      accent: 'rgba(29, 185, 84, 0.09)',
+    },
+    common: {
+      glow: 'rgba(148, 163, 184, 0.14)',
+      accent: 'rgba(100, 116, 139, 0.08)',
+    },
+    uncommon: {
+      glow: 'rgba(16, 185, 129, 0.18)',
+      accent: 'rgba(5, 150, 105, 0.10)',
+    },
+    rare: {
+      glow: 'rgba(59, 130, 246, 0.22)',
+      accent: 'rgba(37, 99, 235, 0.12)',
+    },
+    epic: {
+      glow: 'rgba(168, 85, 247, 0.24)',
+      accent: 'rgba(147, 51, 234, 0.13)',
+    },
+    legendary: {
+      glow: 'rgba(245, 158, 11, 0.26)',
+      accent: 'rgba(217, 119, 6, 0.14)',
+    },
+    mythic: {
+      glow: 'rgba(244, 63, 94, 0.28)',
+      accent: 'rgba(225, 29, 72, 0.16)',
+    },
+  };
+
+  let isShockwaveActive = false;
+
+  $: currentAura = $activeWinnerCard
+    ? (TIER_AURA_COLORS[$activeWinnerCard.rarityTier] || TIER_AURA_COLORS.default)
+    : TIER_AURA_COLORS.default;
+
   function handleRollComplete(winner, isNew) {
     activeArenaTrack.set(winner);
+    isShockwaveActive = true;
+    setTimeout(() => {
+      isShockwaveActive = false;
+    }, 480);
     if (winner.preview_url) {
       playArenaAudio(winner.preview_url);
     }
@@ -250,6 +291,17 @@
 
   <!-- 2. Crate RNG Game Arena View -->
   <div class="game-viewport {$isCrateReady ? '' : 'hidden'}" id="gameArenaScreen">
+    <!-- Ambient Reactive Aura Layer -->
+    <div
+      class="ambient-aura-layer {$isSpinning ? 'is-spinning' : ''} {isShockwaveActive ? 'shockwave-flash' : ''}"
+      aria-hidden="true"
+      style="--tier-glow-color: {currentAura.glow}; --tier-glow-accent: {currentAura.accent};"
+    >
+      <div class="aura-orb aura-orb-primary"></div>
+      <div class="aura-orb aura-orb-secondary"></div>
+      <div class="aura-shockwave"></div>
+    </div>
+
     <Hud />
 
     <main class="game-stage-body">

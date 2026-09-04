@@ -655,6 +655,7 @@ body {
   padding: 24px 16px;
   position: relative;
   overflow: hidden;
+  z-index: 10;
 }
 
 /* Conveyor Spinner Machine */
@@ -2709,4 +2710,145 @@ a.meta-tag.source-tag:hover strong {
 
 .btn-settings-test:active {
   transform: translateY(0);
+}
+
+/* ==========================================================================
+   AMBIENT REACTIVE AURA (HYBRID KINETIC & TIER-DRIVEN)
+   ========================================================================== */
+.ambient-aura-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+  contain: strict;
+  opacity: 0.85;
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.aura-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(85px);
+  will-change: transform, opacity;
+  transform-origin: center center;
+  transition:
+    background 1.2s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Primary Top/Center Orb behind Slot Reel & Spotlight */
+.aura-orb-primary {
+  top: 22%;
+  left: 50%;
+  width: 720px;
+  height: 400px;
+  margin-left: -360px;
+  margin-top: -200px;
+  background: radial-gradient(
+    ellipse at center,
+    var(--tier-glow-color, rgba(29, 185, 84, 0.16)) 0%,
+    transparent 72%
+  );
+  animation: auraBreathe 10s ease-in-out infinite alternate;
+}
+
+/* Secondary Lower Orb below Deck */
+.aura-orb-secondary {
+  bottom: 8%;
+  left: 50%;
+  width: 560px;
+  height: 320px;
+  margin-left: -280px;
+  background: radial-gradient(
+    ellipse at center,
+    var(--tier-glow-accent, rgba(29, 185, 84, 0.10)) 0%,
+    transparent 70%
+  );
+  animation: auraDrift 14s ease-in-out infinite alternate-reverse;
+}
+
+/* Momentary Shockwave Flash upon Mechanical Brake Latch */
+.aura-shockwave {
+  position: absolute;
+  top: 35%;
+  left: 50%;
+  width: 440px;
+  height: 440px;
+  margin-left: -220px;
+  margin-top: -220px;
+  border-radius: 50%;
+  filter: blur(55px);
+  background: radial-gradient(
+    circle,
+    var(--tier-glow-color, rgba(29, 185, 84, 0.38)) 0%,
+    transparent 70%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.6);
+}
+
+.ambient-aura-layer.shockwave-flash .aura-shockwave {
+  animation: auraShockwaveBurst 0.45s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+}
+
+/* Kinetic Motion when Reel is Spinning */
+.ambient-aura-layer.is-spinning .aura-orb-primary {
+  transform: scaleX(1.42) scaleY(0.82);
+  opacity: 1.25;
+  animation: auraSpinPulse 0.6s ease-in-out infinite alternate;
+}
+
+.ambient-aura-layer.is-spinning .aura-orb-secondary {
+  transform: scaleX(1.3) scaleY(0.88);
+  opacity: 1.15;
+}
+
+@keyframes auraBreathe {
+  0% { transform: scale(1) translateY(0); }
+  100% { transform: scale(1.08) translateY(-14px); }
+}
+
+@keyframes auraDrift {
+  0% { transform: scale(1) translateX(0); }
+  100% { transform: scale(1.06) translateX(18px); }
+}
+
+@keyframes auraSpinPulse {
+  0% {
+    transform: scaleX(1.35) scaleY(0.84);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scaleX(1.52) scaleY(0.78);
+    opacity: 1.35;
+  }
+}
+
+@keyframes auraShockwaveBurst {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.7);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.45);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-orb-primary,
+  .aura-orb-secondary,
+  .aura-shockwave,
+  .ambient-aura-layer.is-spinning .aura-orb-primary,
+  .ambient-aura-layer.is-spinning .aura-orb-secondary {
+    animation: none !important;
+    transform: none !important;
+  }
 }
