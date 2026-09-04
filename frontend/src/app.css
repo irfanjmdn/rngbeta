@@ -674,7 +674,7 @@ body {
 /* Brake Needles with Caliper Pinch Dynamics */
 .reel-pointer-top {
   position: absolute;
-  top: 9px;
+  top: 0;
   left: 50%;
   transform: translateX(-50%);
   width: 0;
@@ -689,7 +689,7 @@ body {
 
 .reel-pointer-bottom {
   position: absolute;
-  bottom: 9px;
+  bottom: 0;
   left: 50%;
   transform: translateX(-50%);
   width: 0;
