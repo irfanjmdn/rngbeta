@@ -37,59 +37,80 @@
   const TIER_VISUALIZER_CONFIG = {
     default: {
       color: [29, 185, 84],
-      maxRadius: 380,
-      ringSpeed: 6.2,
-      lineWidth: 2.5,
+      maxRadius: 360,
+      ringSpeed: 7.0,
+      lineWidth: 8,
+      blur: 16,
+      initialOpacity: 0.58,
+      hasCore: false,
       hasEcho: false,
       emberCount: 0,
     },
     common: {
       color: [148, 163, 184],
-      maxRadius: 340,
-      ringSpeed: 5.6,
-      lineWidth: 2.2,
+      maxRadius: 210,
+      ringSpeed: 5.8,
+      lineWidth: 5,
+      blur: 14,
+      initialOpacity: 0.38,
+      hasCore: false,
       hasEcho: false,
       emberCount: 0,
     },
     uncommon: {
       color: [16, 185, 129],
-      maxRadius: 380,
-      ringSpeed: 6.0,
-      lineWidth: 2.5,
+      maxRadius: 320,
+      ringSpeed: 6.8,
+      lineWidth: 7,
+      blur: 16,
+      initialOpacity: 0.52,
+      hasCore: false,
       hasEcho: false,
       emberCount: 0,
     },
     rare: {
       color: [59, 130, 246],
-      maxRadius: 420,
-      ringSpeed: 6.8,
-      lineWidth: 2.8,
+      maxRadius: 460,
+      ringSpeed: 8.5,
+      lineWidth: 10,
+      blur: 18,
+      initialOpacity: 0.70,
+      hasCore: false,
       hasEcho: true,
-      emberCount: 2,
+      emberCount: 3,
     },
     epic: {
       color: [168, 85, 247],
-      maxRadius: 460,
-      ringSpeed: 7.4,
-      lineWidth: 3.2,
+      maxRadius: 620,
+      ringSpeed: 10.5,
+      lineWidth: 14,
+      blur: 21,
+      initialOpacity: 0.85,
+      hasCore: true,
       hasEcho: true,
-      emberCount: 4,
+      emberCount: 6,
     },
     legendary: {
       color: [245, 158, 11],
-      maxRadius: 500,
-      ringSpeed: 8.2,
-      lineWidth: 3.6,
+      maxRadius: 780,
+      ringSpeed: 13.0,
+      lineWidth: 18,
+      blur: 24,
+      initialOpacity: 0.95,
+      hasCore: true,
       hasEcho: true,
-      emberCount: 7,
+      emberCount: 10,
     },
     mythic: {
       color: [244, 63, 94],
-      maxRadius: 540,
-      ringSpeed: 9.0,
-      lineWidth: 4.0,
+      maxRadius: 980,
+      ringSpeed: 16.0,
+      lineWidth: 22,
+      blur: 28,
+      initialOpacity: 1.0,
+      hasCore: true,
       hasEcho: true,
-      emberCount: 10,
+      emberCount: 15,
     },
   };
 
@@ -99,30 +120,37 @@
 
     rings.push({
       radius: 14,
-      maxRadius: cfg.maxRadius * (0.85 + intensity * 0.25),
-      speed: cfg.ringSpeed * (0.9 + intensity * 0.25),
-      opacity: 0.8 + intensity * 0.2,
-      lineWidth: cfg.lineWidth * (0.9 + intensity * 0.25),
+      maxRadius: cfg.maxRadius * intensity,
+      speed: cfg.ringSpeed * (0.9 + intensity * 0.1),
+      initialOpacity: Math.min(1.0, cfg.initialOpacity * intensity),
+      opacity: Math.min(1.0, cfg.initialOpacity * intensity),
+      lineWidth: cfg.lineWidth,
+      blur: cfg.blur,
       color: cfg.color,
+      hasCore: cfg.hasCore,
     });
 
     if (cfg.hasEcho) {
       setTimeout(() => {
         rings.push({
           radius: 14,
-          maxRadius: cfg.maxRadius * 0.75,
-          speed: cfg.ringSpeed * 0.78,
-          opacity: 0.55,
-          lineWidth: cfg.lineWidth * 0.75,
+          maxRadius: cfg.maxRadius * 0.8 * intensity,
+          speed: cfg.ringSpeed * 0.82,
+          initialOpacity: cfg.initialOpacity * 0.65 * intensity,
+          opacity: cfg.initialOpacity * 0.65 * intensity,
+          lineWidth: Math.max(4, Math.round(cfg.lineWidth * 0.7)),
+          blur: Math.round(cfg.blur * 0.85),
           color: cfg.color,
+          hasCore: false,
         });
       }, 70);
     }
 
     if (cfg.emberCount > 0) {
-      for (let i = 0; i < cfg.emberCount; i++) {
+      const count = Math.round(cfg.emberCount * intensity);
+      for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const speed = (3.0 + Math.random() * 5.0) * (0.85 + intensity * 0.35);
+        const speed = (3.0 + Math.random() * 5.0) * (0.85 + intensity * 0.15);
         embers.push({
           x: 0,
           y: 0,
@@ -159,30 +187,44 @@
 
     for (let i = rings.length - 1; i >= 0; i--) {
       const r = rings[i];
+      r.radius += r.speed;
+      const progress = Math.min(1.0, r.radius / r.maxRadius);
+      r.opacity = r.initialOpacity * Math.pow(1 - progress, 1.35);
+
+      if (progress >= 1.0 || r.opacity < 0.01) {
+        rings.splice(i, 1);
+        continue;
+      }
+
+      ctx.save();
+      ctx.filter = `blur(${r.blur}px)`;
       ctx.beginPath();
       ctx.arc(centerX, centerY, r.radius, 0, Math.PI * 2);
       ctx.strokeStyle = `rgba(${r.color[0]}, ${r.color[1]}, ${r.color[2]}, ${r.opacity.toFixed(3)})`;
       ctx.lineWidth = r.lineWidth;
-      ctx.shadowColor = `rgba(${r.color[0]}, ${r.color[1]}, ${r.color[2]}, 0.55)`;
-      ctx.shadowBlur = 10;
       ctx.stroke();
 
-      r.radius += r.speed;
-      r.opacity *= 0.93;
-
-      if (r.opacity < 0.015 || r.radius >= r.maxRadius) {
-        rings.splice(i, 1);
+      if (r.hasCore) {
+        ctx.filter = `blur(${Math.round(r.blur * 0.4)}px)`;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, r.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${(r.opacity * 0.75).toFixed(3)})`;
+        ctx.lineWidth = Math.max(3, Math.round(r.lineWidth * 0.25));
+        ctx.stroke();
       }
+      ctx.restore();
     }
 
     for (let i = embers.length - 1; i >= 0; i--) {
       const e = embers[i];
+      ctx.save();
       ctx.beginPath();
       ctx.arc(centerX + e.x, centerY + e.y, e.radius, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(${e.color[0]}, ${e.color[1]}, ${e.color[2]}, ${e.opacity.toFixed(3)})`;
       ctx.shadowColor = `rgba(${e.color[0]}, ${e.color[1]}, ${e.color[2]}, 0.8)`;
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = 8;
       ctx.fill();
+      ctx.restore();
 
       e.x += e.vx;
       e.y += e.vy;
@@ -194,8 +236,6 @@
         embers.splice(i, 1);
       }
     }
-
-    ctx.shadowBlur = 0;
 
     if (rings.length > 0 || embers.length > 0) {
       rafId = requestAnimationFrame(renderVisualizerFrame);
@@ -439,11 +479,11 @@
   function handleRollComplete(winner, isNew) {
     activeArenaTrack.set(winner);
     isShockwaveActive = true;
-    spawnShockwave(1.35);
+    spawnShockwave(1.0);
     ensureVisualizerLoop();
     setTimeout(() => {
       isShockwaveActive = false;
-    }, 480);
+    }, 550);
     if (winner.preview_url) {
       playArenaAudio(winner.preview_url);
     }
