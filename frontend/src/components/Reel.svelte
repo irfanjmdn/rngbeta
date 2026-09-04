@@ -93,7 +93,7 @@
     return div;
   }
 
-  function updateReelScales() {
+  function updateReelScales(leanY = 0) {
     if (!reelTrack || !reelViewport) return;
     const cards = reelTrack.children;
     if (!cards.length) return;
@@ -110,8 +110,13 @@
       const scale = 1 - normDist * 0.3;
       const opacity = 1 - normDist * 0.35;
 
+      // 3D Parallax: subtle Z depth curve across conveyor
+      const depthZ = (1 - normDist) * 16 - normDist * 22;
+
       card.style.setProperty('--card-scale', scale.toFixed(3));
       card.style.setProperty('--card-opacity', opacity.toFixed(3));
+      card.style.setProperty('--card-depth-z', `${depthZ.toFixed(1)}px`);
+      card.style.setProperty('--card-lean-y', `${leanY.toFixed(2)}deg`);
     }
   }
 
@@ -131,7 +136,7 @@
     const targetX = -(index * cardTotalWidth) + centerTarget;
     reelTrack.style.transition = 'none';
     reelTrack.style.transform = `translateX(${targetX}px)`;
-    updateReelScales();
+    updateReelScales(0);
   }
 
   export function buildInitialReel() {
@@ -165,7 +170,10 @@
     }
     if (reelPointerTop) reelPointerTop.classList.remove('pointer-engaging', 'caliper-pinch');
     if (reelPointerBottom) reelPointerBottom.classList.remove('pointer-engaging', 'caliper-pinch');
-    if (reelTrack) reelTrack.classList.remove('is-spinning');
+    if (reelTrack) {
+      reelTrack.classList.remove('is-spinning');
+      updateReelScales(0);
+    }
   }
 
   export function executeSpin() {
@@ -230,17 +238,30 @@
 
     let lastCrossedCard = START_INDEX;
     let lastTickAudioTime = 0;
+    let lastX = startTranslateX;
+    let lastTime = performance.now();
+    let velocitySmooth = 0;
 
     function trackReelTick() {
       if (!$isSpinning) return;
       try {
         const matrix = new DOMMatrixReadOnly(window.getComputedStyle(reelTrack).transform);
         const currentX = matrix.m41;
+        const now = performance.now();
+        const dt = Math.max(now - lastTime, 1);
+        const rawVelocity = (currentX - lastX) / dt;
+        lastX = currentX;
+        lastTime = now;
+
+        velocitySmooth = velocitySmooth * 0.75 + rawVelocity * 0.25;
+
+        // Subtle inertial velocity lean (clamped between -7.5 and 7.5 degrees)
+        const leanAngle = Math.max(-7.5, Math.min(7.5, velocitySmooth * 1.5));
+
         const distanceTraversed = centerTarget - currentX;
         const currentCard = Math.floor((distanceTraversed + cardTotalWidth * 0.5) / cardTotalWidth);
 
         if (currentCard > lastCrossedCard && currentCard <= WINNER_INDEX) {
-          const now = performance.now();
           if (now - lastTickAudioTime >= 24) {
             const progress = Math.min(1, (currentCard - START_INDEX) / (WINNER_INDEX - START_INDEX));
             playTickSound(progress);
@@ -249,7 +270,7 @@
           lastCrossedCard = currentCard;
         }
 
-        updateReelScales();
+        updateReelScales(leanAngle);
       } catch (e) {}
 
       if ($isSpinning) {
@@ -299,7 +320,7 @@
         void allCards[WINNER_INDEX].offsetWidth;
         allCards[WINNER_INDEX].classList.add('winner-landed');
       }
-      updateReelScales();
+      updateReelScales(0);
 
       // Audio effects
       playLandingImpactBass();
