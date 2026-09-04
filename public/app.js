@@ -1483,7 +1483,7 @@
       }
     }
     winnerOdds.textContent = card.dropChance;
-    winnerCountBadge.textContent = isNew ? 'NEW UNLOCK!' : `x${gameInventory[card.id]} OWNED`;
+    winnerCountBadge.textContent = isNew ? 'FIRST SEEN' : 'DUPLICATE';
 
     // Star button state
     if (btnWinnerStar) {

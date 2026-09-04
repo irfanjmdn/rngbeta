@@ -162,9 +162,30 @@
 
   <div class="winner-info">
     <div class="winner-header-row">
-      <span id="winnerCountBadge" class="winner-count-highlight">
-        {$activeWinnerCard ? (isNewUnlock ? 'NEW UNLOCK!' : `x${ownedCount} OWNED`) : ''}
-      </span>
+      {#if $activeWinnerCard}
+        <div class="winner-header-badges">
+          <span
+            id="winnerCountBadge"
+            class="winner-foil-stamp {isNewUnlock ? 'is-first-seen' : 'is-duplicate'}"
+            style="--tier-color: {$activeWinnerCard.rarityColor};"
+          >
+            <span class="stamp-icon">{isNewUnlock ? '✦' : '◈'}</span>
+            <span class="stamp-text">{isNewUnlock ? 'FIRST SEEN' : 'DUPLICATE'}</span>
+          </span>
+          {#if $activeWinnerCard.dropChance}
+            <span
+              class="winner-odds-pill"
+              id="winnerOddsStamp"
+              style="--tier-color: {$activeWinnerCard.rarityColor};"
+            >
+              <span class="odds-label">ODDS</span>
+              <span class="odds-val">{$activeWinnerCard.dropChance.toUpperCase()}</span>
+            </span>
+          {/if}
+        </div>
+      {:else}
+        <span id="winnerCountBadge" class="winner-count-highlight" style="display: none;"></span>
+      {/if}
       {#if $activeWinnerCard}
         <button
           class="btn-star-track {isStarred ? 'is-starred' : ''}"

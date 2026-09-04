@@ -290,12 +290,16 @@
           <div class="binder-empty-card">
             <div class="binder-empty-icon">&#128451;</div>
             <div class="binder-empty-title">
-              {searchQuery ? 'No matching tracks found' : 'No cards unlocked yet'}
+              {currentFilter === 'starred'
+                ? 'No starred tracks yet'
+                : (searchQuery ? 'No matching tracks found' : 'No cards unlocked yet')}
             </div>
             <div class="binder-empty-text">
-              {searchQuery
-                ? `No unlocked tracks match "${searchQuery}". Try another search.`
-                : 'Spin crates in the Arena to discover and unlock tracks for your binder!'}
+              {currentFilter === 'starred'
+                ? 'Click the star on any card or winner reveal to save your favorites here.'
+                : (searchQuery
+                  ? `No unlocked tracks match "${searchQuery}". Try another search.`
+                  : 'Spin crates in the Arena to discover and unlock tracks for your binder!')}
             </div>
             {#if searchQuery}
               <button

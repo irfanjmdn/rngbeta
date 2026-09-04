@@ -1228,8 +1228,134 @@ body {
 .winner-header-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.winner-header-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Collector Foil Stamp Base */
+.winner-foil-stamp {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  overflow: hidden;
+  user-select: none;
+  border: 1px solid var(--tier-color, rgba(255, 255, 255, 0.2));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.03) 30%,
+    rgba(255, 255, 255, 0.14) 60%,
+    rgba(255, 255, 255, 0.02) 100%
+  ), var(--stamp-base-bg, rgba(15, 23, 42, 0.85));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Holographic Foil Sweep */
+.winner-foil-stamp::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 80%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  transform: skewX(-22deg);
+  animation: foilShimmer 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes foilShimmer {
+  0% { left: -120%; }
+  30%, 100% { left: 160%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .winner-foil-stamp::after {
+    animation: none !important;
+    display: none !important;
+  }
+}
+
+.winner-foil-stamp .stamp-icon {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--tier-color, #FFF);
+  text-shadow: 0 0 6px var(--tier-color, #FFF);
+}
+
+/* FIRST SEEN Variant */
+.winner-foil-stamp.is-first-seen {
+  --stamp-base-bg: rgba(16, 185, 129, 0.12);
+  border-color: var(--tier-color, #10B981);
+}
+
+.winner-foil-stamp.is-first-seen .stamp-text {
+  background: linear-gradient(180deg, #FFFFFF 20%, #E2E8F0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800;
+}
+
+/* DUPLICATE Variant */
+.winner-foil-stamp.is-duplicate {
+  --stamp-base-bg: rgba(100, 116, 139, 0.14);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.winner-foil-stamp.is-duplicate .stamp-text {
+  color: #CBD5E1;
+}
+
+/* Roll Odds Pill */
+.winner-odds-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #94A3B8;
+  user-select: none;
+}
+
+.winner-odds-pill .odds-label {
+  font-size: 9px;
+  font-weight: 800;
+  opacity: 0.7;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.winner-odds-pill .odds-val {
+  color: var(--tier-color, #38BDF8);
+  font-weight: 800;
 }
 
 .winner-rarity-banner,
