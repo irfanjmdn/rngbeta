@@ -12,6 +12,7 @@
     binderAudioTime,
     activeModal,
   } from './lib/store.js';
+  import { connectMediaElement, getBassEnergy } from './lib/audio.js';
 
   import Onboarding from './components/Onboarding.svelte';
   import Hud from './components/Hud.svelte';
@@ -25,8 +26,43 @@
   let reelComponent;
   let arenaAudioEl;
   let binderAudioEl;
+  let auraLayerEl;
   let arenaFadeInterval = null;
   let binderFadeInterval = null;
+
+  let rafId = null;
+  let currentPulseScale = 0;
+  let currentPulseOpacity = 0;
+
+  function updateAudioAura() {
+    const targetEnergy = getBassEnergy();
+    const lerpFactor = targetEnergy > currentPulseScale ? 0.35 : 0.15;
+    currentPulseScale += (targetEnergy * 0.20 - currentPulseScale) * lerpFactor;
+    currentPulseOpacity += (targetEnergy * 0.40 - currentPulseOpacity) * lerpFactor;
+
+    if (auraLayerEl) {
+      auraLayerEl.style.setProperty('--audio-pulse-scale', currentPulseScale.toFixed(4));
+      auraLayerEl.style.setProperty('--audio-pulse-opacity', currentPulseOpacity.toFixed(4));
+    }
+
+    if ($isArenaPlaying || $isBinderPlaying || currentPulseScale > 0.002) {
+      rafId = requestAnimationFrame(updateAudioAura);
+    } else {
+      rafId = null;
+      currentPulseScale = 0;
+      currentPulseOpacity = 0;
+      if (auraLayerEl) {
+        auraLayerEl.style.setProperty('--audio-pulse-scale', '0');
+        auraLayerEl.style.setProperty('--audio-pulse-opacity', '0');
+      }
+    }
+  }
+
+  function ensureAudioAuraLoop() {
+    if (!rafId && typeof window !== 'undefined') {
+      rafId = requestAnimationFrame(updateAudioAura);
+    }
+  }
 
   function stopOrFadeOutArenaAudio(durationMs = 750) {
     if (arenaFadeInterval) {
@@ -121,6 +157,7 @@
     if (!arenaAudioEl || !url) return;
 
     try {
+      connectMediaElement(arenaAudioEl);
       arenaAudioEl.pause();
       arenaAudioEl.volume = 1;
       if (arenaAudioEl.src !== url) {
@@ -128,6 +165,7 @@
       }
       arenaAudioEl.currentTime = startTime;
       arenaAudioEl.play().catch(() => isArenaPlaying.set(false));
+      ensureAudioAuraLoop();
     } catch (e) {
       isArenaPlaying.set(false);
     }
@@ -142,7 +180,9 @@
       if (!arenaAudioEl.src || !arenaAudioEl.src.includes(track.preview_url)) {
         playArenaAudio(track.preview_url);
       } else {
+        connectMediaElement(arenaAudioEl);
         arenaAudioEl.play().catch(() => isArenaPlaying.set(false));
+        ensureAudioAuraLoop();
       }
     } else {
       arenaAudioEl.pause();
@@ -169,6 +209,7 @@
     }
 
     try {
+      connectMediaElement(binderAudioEl);
       binderAudioEl.pause();
       binderAudioEl.volume = 1;
       if (binderAudioEl.src !== card.preview_url) {
@@ -176,6 +217,7 @@
       }
       binderAudioEl.currentTime = 0;
       binderAudioEl.play().catch(() => isBinderPlaying.set(false));
+      ensureAudioAuraLoop();
     } catch (e) {
       isBinderPlaying.set(false);
     }
@@ -189,7 +231,9 @@
       if (!binderAudioEl.src || !binderAudioEl.src.includes($activeBinderTrack.preview_url)) {
         playBinderTrack($activeBinderTrack);
       } else {
+        connectMediaElement(binderAudioEl);
         binderAudioEl.play().catch(() => isBinderPlaying.set(false));
+        ensureAudioAuraLoop();
       }
     } else {
       binderAudioEl.pause();
@@ -256,6 +300,7 @@
   function handleRollComplete(winner, isNew) {
     activeArenaTrack.set(winner);
     isShockwaveActive = true;
+    ensureAudioAuraLoop();
     setTimeout(() => {
       isShockwaveActive = false;
     }, 480);
@@ -263,6 +308,13 @@
       playArenaAudio(winner.preview_url);
     }
   }
+
+  onDestroy(() => {
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+  });
 
   onMount(() => {
     const handleKeydown = (e) => {
@@ -293,6 +345,7 @@
   <div class="game-viewport {$isCrateReady ? '' : 'hidden'}" id="gameArenaScreen">
     <!-- Ambient Reactive Aura Layer -->
     <div
+      bind:this={auraLayerEl}
       class="ambient-aura-layer {$isSpinning ? 'is-spinning' : ''} {isShockwaveActive ? 'shockwave-flash' : ''}"
       aria-hidden="true"
       style="--tier-glow-color: {currentAura.glow}; --tier-glow-accent: {currentAura.accent};"
@@ -328,8 +381,13 @@
   <audio
     id="arenaAudioPlayer"
     bind:this={arenaAudioEl}
+    crossorigin="anonymous"
     preload="none"
-    on:play={() => isArenaPlaying.set(true)}
+    on:play={() => {
+      connectMediaElement(arenaAudioEl);
+      isArenaPlaying.set(true);
+      ensureAudioAuraLoop();
+    }}
     on:pause={() => isArenaPlaying.set(false)}
     on:ended={() => {
       isArenaPlaying.set(false);
@@ -356,8 +414,13 @@
   <audio
     id="binderAudioPlayer"
     bind:this={binderAudioEl}
+    crossorigin="anonymous"
     preload="none"
-    on:play={() => isBinderPlaying.set(true)}
+    on:play={() => {
+      connectMediaElement(binderAudioEl);
+      isBinderPlaying.set(true);
+      ensureAudioAuraLoop();
+    }}
     on:pause={() => isBinderPlaying.set(false)}
     on:ended={() => {
       isBinderPlaying.set(false);

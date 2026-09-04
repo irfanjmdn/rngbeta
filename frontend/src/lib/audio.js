@@ -19,6 +19,62 @@ export function getAudioContext() {
   return audioCtx;
 }
 
+let analyserNode = null;
+let audioDataArray = null;
+
+export function getAnalyserNode() {
+  const ctx = getAudioContext();
+  if (!ctx) return null;
+  if (!analyserNode) {
+    try {
+      analyserNode = ctx.createAnalyser();
+      analyserNode.fftSize = 512;
+      analyserNode.smoothingTimeConstant = 0.7;
+      analyserNode.connect(ctx.destination);
+      audioDataArray = new Uint8Array(analyserNode.frequencyBinCount);
+    } catch (e) {
+      return null;
+    }
+  }
+  return analyserNode;
+}
+
+export function getAudioDestinationNode() {
+  const analyser = getAnalyserNode();
+  if (analyser) return analyser;
+  const ctx = getAudioContext();
+  return ctx ? ctx.destination : null;
+}
+
+export function connectMediaElement(audioEl) {
+  if (!audioEl || audioEl._webAudioConnected) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const analyser = getAnalyserNode();
+    if (!analyser) return;
+    const source = ctx.createMediaElementSource(audioEl);
+    source.connect(analyser);
+    audioEl._webAudioConnected = true;
+  } catch (e) {}
+}
+
+export function getBassEnergy() {
+  if (!analyserNode || !audioDataArray) return 0;
+  try {
+    analyserNode.getByteFrequencyData(audioDataArray);
+    const count = 3;
+    let sum = 0;
+    for (let i = 0; i < count; i++) {
+      sum += audioDataArray[i];
+    }
+    const normalized = sum / (count * 255);
+    return Math.min(1.0, Math.pow(normalized, 1.5) * 1.4);
+  } catch (e) {
+    return 0;
+  }
+}
+
 let sfxVolume = 0.8;
 if (typeof localStorage !== 'undefined') {
   try {
@@ -87,7 +143,7 @@ export function playSampledSound(bufferName, { volume = 1.0, playbackRate = 1.0 
     gain.gain.setValueAtTime(Math.max(0, volume * sfxVolume), ctx.currentTime);
 
     source.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getAudioDestinationNode() || ctx.destination);
     source.start(ctx.currentTime);
     return true;
   } catch (e) {
@@ -116,7 +172,7 @@ export function playTickSound(progressOrFreq = 0) {
       gain.gain.setValueAtTime(0.12 * sfxVolume, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(getAudioDestinationNode() || ctx.destination);
       osc.start(now);
       osc.stop(now + 0.025);
     } catch (e) {}
@@ -139,7 +195,7 @@ export function playPointerSeekSound() {
       gain.gain.setValueAtTime(0.08 * sfxVolume, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(getAudioDestinationNode() || ctx.destination);
       osc.start(now);
       osc.stop(now + 0.095);
     } catch (e) {}
@@ -153,6 +209,7 @@ export function playMechanicalBrakeSound() {
     try {
       const ctx = getAudioContext();
       if (!ctx) return;
+      const dest = getAudioDestinationNode() || ctx.destination;
       const now = ctx.currentTime;
 
       const oscClick = ctx.createOscillator();
@@ -163,7 +220,7 @@ export function playMechanicalBrakeSound() {
       gainClick.gain.setValueAtTime(0.35 * sfxVolume, now);
       gainClick.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
       oscClick.connect(gainClick);
-      gainClick.connect(ctx.destination);
+      gainClick.connect(dest);
       oscClick.start(now);
       oscClick.stop(now + 0.025);
 
@@ -175,7 +232,7 @@ export function playMechanicalBrakeSound() {
       gainHigh.gain.setValueAtTime(0.28 * sfxVolume, now);
       gainHigh.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
       oscHigh.connect(gainHigh);
-      gainHigh.connect(ctx.destination);
+      gainHigh.connect(dest);
       oscHigh.start(now);
       oscHigh.stop(now + 0.045);
 
@@ -187,7 +244,7 @@ export function playMechanicalBrakeSound() {
       gainLow.gain.setValueAtTime(0.4 * sfxVolume, now);
       gainLow.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
       oscLow.connect(gainLow);
-      gainLow.connect(ctx.destination);
+      gainLow.connect(dest);
       oscLow.start(now);
       oscLow.stop(now + 0.08);
     } catch (e) {}
@@ -209,7 +266,7 @@ export function playLandingImpactBass() {
     gain.gain.setValueAtTime(0.45 * sfxVolume, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getAudioDestinationNode() || ctx.destination);
     osc.start(now);
     osc.stop(now + 0.24);
   } catch (e) {}
@@ -230,7 +287,7 @@ export function playStarSound() {
     masterGain.gain.setValueAtTime(sfxVolume, t0);
 
     filter.connect(masterGain);
-    masterGain.connect(ctx.destination);
+    masterGain.connect(getAudioDestinationNode() || ctx.destination);
 
     const oscPing = ctx.createOscillator();
     const gainPing = ctx.createGain();
@@ -248,7 +305,7 @@ export function playStarSound() {
     oscRoot.type = 'sine';
     oscRoot.frequency.setValueAtTime(1318.51, t0);
     gainRoot.gain.setValueAtTime(0.001, t0);
-    gainRoot.gain.linearRampToValueAtTime(0.24, t0 + 0.004);
+    gainRoot.linearRampToValueAtTime(0.24, t0 + 0.004);
     gainRoot.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.38);
     oscRoot.connect(gainRoot);
     gainRoot.connect(filter);
@@ -296,7 +353,7 @@ export function playUnstarSound() {
     gain.gain.setValueAtTime(0.06 * sfxVolume, t0);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.045);
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getAudioDestinationNode() || ctx.destination);
     osc.start(t0);
     osc.stop(t0 + 0.05);
   } catch (e) {}
@@ -307,6 +364,7 @@ export function playFanfareSound(tier) {
     const ctx = getAudioContext();
     if (!ctx) return;
     const now = ctx.currentTime;
+    const dest = getAudioDestinationNode() || ctx.destination;
 
     if (tier === 'mythic' || tier === 'legendary') {
       const chord = tier === 'mythic' ? [523.25, 659.25, 783.99, 1046.5, 1318.5] : [440, 554.37, 659.25, 880];
@@ -319,7 +377,7 @@ export function playFanfareSound(tier) {
         gain.gain.setValueAtTime(0.2 * sfxVolume, now + idx * 0.06);
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.8);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         osc.start(now + idx * 0.06);
         osc.stop(now + idx * 0.06 + 0.82);
       });
@@ -334,7 +392,7 @@ export function playFanfareSound(tier) {
         gain.gain.setValueAtTime(0.16 * sfxVolume, now + idx * 0.05);
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.5);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         osc.start(now + idx * 0.05);
         osc.stop(now + idx * 0.05 + 0.52);
       });
@@ -347,7 +405,7 @@ export function playFanfareSound(tier) {
       gain.gain.setValueAtTime(0.12 * sfxVolume, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(dest);
       osc.start(now);
       osc.stop(now + 0.26);
     }
