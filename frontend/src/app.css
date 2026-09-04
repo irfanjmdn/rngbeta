@@ -1329,8 +1329,8 @@ body {
 
 /* DUPLICATE Variant */
 .winner-foil-stamp.is-duplicate {
-  --stamp-base-bg: rgba(100, 116, 139, 0.14);
-  border-color: rgba(148, 163, 184, 0.3);
+  --stamp-base-bg: rgba(30, 41, 59, 0.45);
+  border-color: rgba(71, 85, 105, 0.45);
 }
 
 .winner-foil-stamp.is-duplicate::after {
@@ -1339,7 +1339,7 @@ body {
 }
 
 .winner-foil-stamp.is-duplicate .stamp-text {
-  color: #CBD5E1;
+  color: #94A3B8;
 }
 
 /* Roll Chance / Luck / Odds Pill */
@@ -1353,16 +1353,20 @@ body {
   gap: 6px;
   padding: 3px 9px;
   border-radius: 6px;
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid var(--tier-color, rgba(255, 255, 255, 0.25));
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 10px color-mix(in srgb, var(--tier-color, #38BDF8) 25%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--tier-color, #38BDF8) 26%, rgba(15, 23, 42, 0.75)) 0%,
+    color-mix(in srgb, var(--tier-color, #38BDF8) 16%, rgba(15, 23, 42, 0.85)) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--tier-color, #38BDF8) 55%, rgba(255, 255, 255, 0.2));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 12px color-mix(in srgb, var(--tier-color, #38BDF8) 32%, transparent);
   font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: #CBD5E1;
   user-select: none;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
 }
 
 /* Shining Animation According to Rarity */

@@ -246,8 +246,8 @@
               id="winnerOddsStamp"
               style="--tier-color: {$activeWinnerCard.rarityColor};"
             >
-              <span class="odds-label chance-label">CHANCE</span>
               <span class="odds-val chance-val">{luckPercentage}</span>
+              <span class="odds-label chance-label">CHANCE</span>
             </span>
           {/if}
           {#if !isNewUnlock}
