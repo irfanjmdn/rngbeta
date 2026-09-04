@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spotify Crate RNG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- =========================================================================
+       1. ONBOARDING & PROFILE LOADER VIEW
+       ========================================================================= -->
+  <main class="onboarding-viewport" id="onboardingScreen">
+    <div class="onboarding-card">
+      <div class="brand-badge-pill">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.502 17.31c-.218.358-.68.472-1.038.254-2.846-1.738-6.427-2.13-10.648-1.167-.406.094-.813-.16-.906-.566-.094-.406.16-.813.566-.906 4.628-1.057 8.583-.615 11.77 1.332.358.218.472.68.256 1.053zm1.47-3.26c-.274.444-.86.588-1.304.314-3.259-2.003-8.228-2.583-12.083-1.413-.497.15-1.028-.135-1.178-.632-.15-.497.135-1.028.632-1.178 4.412-1.34 9.897-.692 13.62 1.599.444.274.588.86.314 1.31zm.126-3.393c-3.908-2.321-10.354-2.535-14.093-1.398-.598.182-1.233-.162-1.415-.76-.182-.598.162-1.233.76-1.415 4.301-1.306 11.418-1.054 15.908 1.611.538.319.715 1.02.396 1.558-.319.538-1.02.715-1.558.396z"/>
+        </svg>
+        <span>STANDALONE CRATE SPINNER</span>
+      </div>
+
+      <h1 class="onboarding-title">SPOTIFY CRATE RNG</h1>
+      <p class="onboarding-desc">
+        Input any public Spotify account to scan all playlists and build your dynamic card-collector crate.
+      </p>
+
+      <form class="onboarding-form" id="formFetchProfile">
+        <label for="inputProfileUrl" class="input-label">Spotify Profile URL or Username</label>
+        <div class="input-group">
+          <input
+            type="text"
+            id="inputProfileUrl"
+            class="input-profile"
+            placeholder="https://open.spotify.com/user/2jp1yf3h1h49zye21bxnxk0w5"
+            autocomplete="off"
+            spellcheck="false"
+            required
+          />
+          <button type="submit" class="btn-build-crate" id="btnBuildCrate">
+            <span id="btnBuildText">Fetch &amp; Build Crate</span>
+            <div class="btn-spinner hidden" id="btnSpinner"></div>
+          </button>
+        </div>
+
+        <div class="quick-demos-bar">
+          <span class="demos-label">Quick load:</span>
+          <button type="button" class="chip-demo" id="btnDemoIrfan">Irfan's Profile (935 Tracks)</button>
+        </div>
+
+        <div class="options-bar">
+          <label class="checkbox-label">
+            <input type="checkbox" id="chkForceRefresh" />
+            <span>Force live re-scrape (bypass local cache)</span>
+          </label>
+        </div>
+      </form>
+
+      <!-- Collapsible Live Progress & Debug Dropdown -->
+      <details class="debug-dropdown" id="debugDropdown">
+        <summary class="debug-summary">
+          <div class="debug-summary-left">
+            <span class="debug-status-dot idle" id="debugStatusDot"></span>
+            <span class="debug-summary-title">Live Scraper Progress &amp; Debug Console</span>
+          </div>
+          <span class="debug-badge" id="debugBadge">0 events</span>
+        </summary>
+        <div class="debug-terminal" id="debugTerminal">
+          <div class="terminal-line system">[SYSTEM] Ready. Enter a Spotify profile URL and click 'Fetch &amp; Build Crate'.</div>
+        </div>
+      </details>
+    </div>
+  </main>
+
+  <!-- =========================================================================
+       2. CRATE RNG GAME ARENA VIEW (ACTIVE UPON PROFILE LOAD)
+       ========================================================================= -->
+  <div class="game-viewport hidden" id="gameArenaScreen">
+    
+    <!-- Top HUD Navigation -->
+    <header class="game-hud-bar">
+      <div class="game-hud-left">
+        <div class="hud-logo-mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+          </svg>
+        </div>
+        <div class="hud-brand-titles">
+          <div class="hud-brand-title">TRACK CRATE RNG</div>
+          <div class="hud-brand-sub" id="hudAccountSub">Active Profile &bull; Initializing</div>
+        </div>
+      </div>
+
+      <div class="game-hud-center">
+        <div class="hud-telemetry-bar">
+          <div class="telemetry-item">
+            <span class="telemetry-label">Mastery</span>
+            <span class="telemetry-val highlight" id="hudMastery">0 / 0</span>
+          </div>
+          <div class="telemetry-divider"></div>
+          <div class="telemetry-item">
+            <span class="telemetry-label">Rolls</span>
+            <span class="telemetry-val" id="hudRolls">0</span>
+          </div>
+          <div class="telemetry-divider"></div>
+          <div class="telemetry-item">
+            <span class="telemetry-label">Rarest</span>
+            <span class="telemetry-val" id="hudRarest">-</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="game-hud-right">
+        <div class="hud-nav-segmented">
+          <button class="btn-hud-tab active" id="btnHudArena" type="button">Roll Arena</button>
+          <button class="btn-hud-tab" id="btnHudBinder" type="button">
+            Binder (<span id="hudBinderCount">0</span>)
+          </button>
+        </div>
+        <button class="btn-hud-secondary" id="btnHudRates" type="button">Odds &amp; Rates</button>
+        <button class="btn-hud-secondary" id="btnHudSettings" type="button" title="Audio and game settings">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align: -2px; margin-right: 4px;">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          Settings
+        </button>
+        <button class="btn-hud-ghost" id="btnSwitchAccount" type="button" title="Load a different Spotify account">
+          Change Profile
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Game Stage Arena -->
+    <main class="game-stage-body">
+      <!-- Conveyor Spinner Reel Machine -->
+      <section class="spinner-machine-wrap" id="spinnerMachineWrap" aria-label="Slot Carousel Reel">
+        <!-- Mechanical Brake Caliper Needles -->
+        <div class="reel-pointer-top" id="reelPointerTop"></div>
+        <div class="reel-pointer-bottom" id="reelPointerBottom"></div>
+        <div class="reel-centerline" id="reelCenterline"></div>
+
+        <!-- Carousel Viewport -->
+        <div class="reel-viewport" id="reelViewport">
+          <div class="reel-track" id="reelTrack">
+            <!-- Dynamically populated album cards -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Winner Spotlight Card Box -->
+      <section class="winner-spotlight-box tier-common" id="winnerSpotlight">
+        <div class="winner-art-column" id="winnerArtColumn">
+          <div class="winner-art-wrap" id="winnerArtWrap" role="button" tabindex="0" aria-label="Play or pause audio preview" title="Click to play or pause audio preview">
+            <img class="winner-art-img" id="winnerArtImg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%231e293b'/%3E%3C/svg%3E" alt="Album Cover" />
+            <div class="winner-art-hover-overlay" id="winnerArtHoverOverlay" aria-hidden="true">
+              <svg class="winner-art-hover-icon" id="winnerArtHoverPlay" width="34" height="34" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+              <svg class="winner-art-hover-icon hidden" id="winnerArtHoverPause" width="34" height="34" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
+                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+              </svg>
+            </div>
+          </div>
+          <div class="winner-rarity-banner" id="winnerTierPill">READY TO ROLL</div>
+        </div>
+
+        <div class="winner-info">
+          <div class="winner-header-row">
+            <span id="winnerCountBadge" class="winner-count-highlight"></span>
+            <button class="btn-star-track" id="btnWinnerStar" type="button" aria-label="Star track" title="Star this track" style="display:none;">
+              <svg class="star-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+              <span class="star-label">Star</span>
+            </button>
+          </div>
+          <div class="winner-title" id="winnerTitle">Press ROLL to Spin Albums</div>
+          <div class="winner-artist" id="winnerArtist">Watch multiple album covers spin past in real-time</div>
+          
+          <div class="winner-audio-seeker" id="winnerAudioSeeker" style="display:none;">
+            <button class="btn-mini-play" id="btnWinnerMiniPlay" type="button" aria-label="Play or pause audio">
+              <svg id="winnerMiniPlayIcon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:block;"><path d="M8 5v14l11-7z"/></svg>
+              <svg id="winnerMiniPauseIcon" class="hidden" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </button>
+            <div class="audio-scrub-track" id="winnerScrubTrack" role="slider" aria-label="Track audio progress scrubber" tabindex="0" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0">
+              <div class="audio-scrub-fill" id="winnerScrubFill"></div>
+              <div class="audio-scrub-thumb" id="winnerScrubThumb"></div>
+            </div>
+            <span class="audio-time-label" id="winnerTimeLabel">0:00 / 0:30</span>
+          </div>
+
+          <div class="winner-footer-row">
+            <div class="winner-meta-tags">
+              <a class="meta-tag source-tag" id="winnerSourceLink" href="#" title="Open playlist in Spotify app">
+                <img class="winner-playlist-badge" id="winnerPlaylistBadge" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" alt="Playlist Cover" title="From playlist" style="display:none;" />
+                <strong class="winner-source" id="winnerSource">-</strong>
+              </a>
+              <span class="meta-tag odds-tag">Odds: <strong class="winner-odds" id="winnerOdds">-</strong></span>
+            </div>
+            <a class="btn-winner-spotify" id="winnerSpotifyBtn" href="#" style="display:none;" title="Play track in Spotify app">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.502 17.31c-.218.358-.68.472-1.038.254-2.846-1.738-6.427-2.13-10.648-1.167-.406.094-.813-.16-.906-.566-.094-.406.16-.813.566-.906 4.628-1.057 8.583-.615 11.77 1.332.358.218.472.68.256 1.053zm1.47-3.26c-.274.444-.86.588-1.304.314-3.259-2.003-8.228-2.583-12.083-1.413-.497.15-1.028-.135-1.178-.632-.15-.497.135-1.028.632-1.178 4.412-1.34 9.897-.692 13.62 1.599.444.274.588.86.314 1.31zm.126-3.393c-3.908-2.321-10.354-2.535-14.093-1.398-.598.182-1.233-.162-1.415-.76-.182-.598.162-1.233.76-1.415 4.301-1.306 11.418-1.054 15.908 1.611.538.319.715 1.02.396 1.558-.319.538-1.02.715-1.558.396z"/>
+              </svg>
+              <span>Listen on Spotify</span>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Control Deck Controls -->
+      <footer class="game-controls-deck">
+        <div class="deck-col-left">
+          <button class="btn-auto-roll-lock" id="btnAutoRoll" type="button" aria-label="Auto-Roll continuous spinning" title="Auto-Roll (Lock continuous spinning)">
+            <svg class="auto-roll-lock-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M17 2l4 4-4 4"/>
+              <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
+              <path d="M7 22l-4-4 4-4"/>
+              <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
+              <rect x="9" y="10" width="6" height="5" rx="1" fill="currentColor"/>
+              <path d="M10 10V8.5a2 2 0 0 1 4 0V10"/>
+            </svg>
+            <span class="auto-roll-status-dot"></span>
+          </button>
+        </div>
+
+        <div class="deck-col-center">
+          <button class="btn-big-roll" id="btnBigRoll" type="button">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+            <span id="lblRollBtn">ROLL (R)</span>
+          </button>
+        </div>
+
+        <div class="deck-col-right">
+          <button class="btn-auto-skip-lock" id="btnAutoSkip" type="button" aria-label="Auto Skip roll animation" title="Auto Skip (Snap immediately at 0.75s)">
+            <svg class="auto-skip-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polygon points="13 19 22 12 13 5 13 19"/>
+              <polygon points="2 19 11 12 2 5 2 19"/>
+            </svg>
+            <span class="auto-skip-status-dot"></span>
+          </button>
+        </div>
+      </footer>
+
+    </main>
+  </div>
+
+  <!-- =========================================================================
+       3. ALBUM CARD BINDER MODAL
+       ========================================================================= -->
+  <dialog class="game-binder-modal" id="gameBinderModal">
+    <div class="binder-dialog-content">
+      <div class="binder-modal-header">
+        <div class="binder-title-wrap">
+          <h2 class="binder-title">ALBUM CARD BINDER</h2>
+          <span class="binder-progress-chip" id="binderProgressText">0 / 0 Unlocked (0%)</span>
+        </div>
+        <button class="btn-hud-tab" id="btnCloseBinderModal" type="button">Back to Arena</button>
+      </div>
+
+      <nav class="binder-filters-bar" id="binderFilterBar" aria-label="Rarity Filter">
+        <button class="cat-chip active" data-filter="all" type="button">All Cards</button>
+        <button class="cat-chip" data-filter="starred" type="button">★ Starred (<span id="binderCatStarredCount">0</span>)</button>
+        <button class="cat-chip" data-filter="mythic" type="button">Mythic (0.5%)</button>
+        <button class="cat-chip" data-filter="legendary" type="button">Legendary (2.5%)</button>
+        <button class="cat-chip" data-filter="epic" type="button">Epic (7.0%)</button>
+        <button class="cat-chip" data-filter="rare" type="button">Rare (14.0%)</button>
+        <button class="cat-chip" data-filter="uncommon" type="button">Uncommon (26.0%)</button>
+        <button class="cat-chip" data-filter="common" type="button">Common (50.0%)</button>
+      </nav>
+
+      <div class="binder-toolbar" id="binderToolbar">
+        <div class="binder-search-wrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input
+            type="search"
+            class="binder-search-input"
+            id="binderSearchInput"
+            placeholder="Search unlocked tracks or artists..."
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Search unlocked tracks or artists"
+          />
+          <button class="btn-clear-search hidden" id="btnClearBinderSearch" type="button" aria-label="Clear search">&times;</button>
+        </div>
+        <div class="binder-sort-wrap">
+          <label for="binderSortSelect" class="binder-sort-label">Sort by</label>
+          <select class="binder-sort-select" id="binderSortSelect" aria-label="Sort tracks by">
+            <option value="recent-desc">Recently Owned</option>
+            <option value="rarity-desc">Rarest First</option>
+            <option value="rarity-asc">Common First</option>
+            <option value="artist-asc">Artist (A-Z)</option>
+            <option value="title-asc">Title (A-Z)</option>
+            <option value="count-desc">Most Owned</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="binder-scroll-area">
+        <div class="binder-grid-full" id="binderGridFull">
+          <!-- Dynamically populated binder tiles -->
+        </div>
+      </div>
+
+      <!-- Docked Minimal Binder Audio Player -->
+      <footer class="binder-audio-dock" id="binderAudioDock" style="display:none;">
+        <div class="binder-dock-track-info">
+          <img class="binder-dock-art" id="binderDockArt" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%231e293b'/%3E%3C/svg%3E" alt="Album Cover" />
+          <div class="binder-dock-text">
+            <div class="binder-dock-title" id="binderDockTitle">Track Title</div>
+            <div class="binder-dock-artist" id="binderDockArtist">Artist Name</div>
+          </div>
+          <span class="binder-dock-tier-pill" id="binderDockTier">COMMON</span>
+        </div>
+
+        <div class="binder-dock-scrub-group">
+          <button class="btn-dock-play" id="btnBinderDockPlay" type="button" aria-label="Play or pause binder audio">
+            <svg id="binderDockPlayIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:block;"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="binderDockPauseIcon" class="hidden" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          </button>
+          <div class="audio-scrub-track" id="binderScrubTrack" role="slider" aria-label="Binder audio timeline scrubber" tabindex="0" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0">
+            <div class="audio-scrub-fill" id="binderScrubFill"></div>
+            <div class="audio-scrub-thumb" id="binderScrubThumb"></div>
+          </div>
+          <span class="audio-time-label" id="binderTimeLabel">0:00 / 0:30</span>
+        </div>
+
+        <div class="binder-dock-actions">
+          <a class="btn-binder-dock-spotify" id="binderDockSpotifyBtn" href="#" title="Play in Spotify app">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.502 17.31c-.218.358-.68.472-1.038.254-2.846-1.738-6.427-2.13-10.648-1.167-.406.094-.813-.16-.906-.566-.094-.406.16-.813.566-.906 4.628-1.057 8.583-.615 11.77 1.332.358.218.472.68.256 1.053zm1.47-3.26c-.274.444-.86.588-1.304.314-3.259-2.003-8.228-2.583-12.083-1.413-.497.15-1.028-.135-1.178-.632-.15-.497.135-1.028.632-1.178 4.412-1.34 9.897-.692 13.62 1.599.444.274.588.86.314 1.31zm.126-3.393c-3.908-2.321-10.354-2.535-14.093-1.398-.598.182-1.233-.162-1.415-.76-.182-.598.162-1.233.76-1.415 4.301-1.306 11.418-1.054 15.908 1.611.538.319.715 1.02.396 1.558-.319.538-1.02.715-1.558.396z"/>
+            </svg>
+            <span>Play on Spotify</span>
+          </a>
+        </div>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- =========================================================================
+       4. RARITY RATES MODAL
+       ========================================================================= -->
+  <dialog class="game-rates-modal" id="gameRatesModal">
+    <div class="rates-dialog-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align: -3px; margin-right: 8px; color: var(--brand-green);">
+            <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
+            <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
+            <path d="M7 21h10"/>
+            <path d="M12 3v18"/>
+            <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>
+          </svg>
+          DYNAMIC ODDS &amp; RATES
+        </div>
+        <button class="modal-close-btn" id="btnCloseRatesModal" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="rates-list" id="ratesList">
+        <div class="rates-row">
+          <span class="tier-label-badge" style="background: rgba(244, 63, 94, 0.15); color: #F43F5E; border: 1px solid #F43F5E;">Mythic</span>
+          <span class="rates-desc">Exclusive &bull; <strong style="color: var(--text-main);">0 tracks</strong></span>
+          <strong class="rates-odds" style="color:#F43F5E;">1 in 200 (0.5%)</strong>
+        </div>
+        <div class="rates-row">
+          <span class="tier-label-badge" style="background: rgba(245, 158, 11, 0.15); color: #F59E0B; border: 1px solid #F59E0B;">Legendary</span>
+          <span class="rates-desc">Curated &bull; <strong style="color: var(--text-main);">0 tracks</strong></span>
+          <strong class="rates-odds" style="color:#F59E0B;">1 in 40 (2.5%)</strong>
+        </div>
+        <div class="rates-row">
+          <span class="tier-label-badge" style="background: rgba(168, 85, 247, 0.15); color: #A855F7; border: 1px solid #A855F7;">Epic</span>
+          <span class="rates-desc">Mid-size &bull; <strong style="color: var(--text-main);">0 tracks</strong></span>
+          <strong class="rates-odds" style="color:#A855F7;">1 in 14 (7.0%)</strong>
+        </div>
+        <div class="rates-row">
+          <span class="tier-label-badge" style="background: rgba(59, 130, 246, 0.15); color: #3B82F6; border: 1px solid #3B82F6;">Rare</span>
+          <span class="rates-desc">Rotation &bull; <strong style="color: var(--text-main);">0 tracks</strong></span>
+          <strong class="rates-odds" style="color:#3B82F6;">1 in 7 (14.0%)</strong>
+        </div>
+        <div class="rates-row">
+          <span class="tier-label-badge" style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid #10B981;">Uncommon</span>
+          <span class="rates-desc">Popular &bull; <strong style="color: var(--text-main);">0 tracks</strong></span>
+          <strong class="rates-odds" style="color:#10B981;">1 in 4 (26.0%)</strong>
+        </div>
+        <div class="rates-row">
+          <span class="tier-label-badge" style="background: rgba(148, 163, 184, 0.15); color: #94A3B8; border: 1px solid #94A3B8;">Common</span>
+          <span class="rates-desc">Frequent &bull; <strong style="color: var(--text-main);">0 tracks</strong></span>
+          <strong class="rates-odds" style="color:#94A3B8;">1 in 2 (50.0%)</strong>
+        </div>
+      </div>
+      <div class="rates-note" id="ratesNote">
+        Odds are calculated dynamically based on public playlists discovered on the loaded profile.
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Settings Modal Dialog -->
+  <dialog class="game-settings-modal" id="gameSettingsModal">
+    <div class="settings-dialog-content">
+      <div class="modal-header">
+        <div class="modal-title" style="display:flex; align-items:center; gap:8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          GAME SETTINGS
+        </div>
+        <button class="modal-close-btn" id="btnCloseSettingsModal" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="settings-body">
+        <div class="settings-section">
+          <div class="settings-row">
+            <div class="settings-info">
+              <div class="settings-label">Sound Effects Volume</div>
+              <div class="settings-sublabel">Roll ticker, caliper latch, impact bass, and star chime</div>
+            </div>
+            <span class="settings-val-badge" id="sfxVolumeBadge">80%</span>
+          </div>
+          <div class="settings-slider-wrap">
+            <input type="range" class="settings-slider" id="sfxVolumeSlider" min="0" max="100" step="1" value="80" aria-label="Sound effects volume" />
+          </div>
+          <div class="settings-actions-row">
+            <button type="button" class="btn-settings-test" id="btnTestSfx" title="Preview roll sound effects at current volume">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              </svg>
+              Test SFX
+            </button>
+            <button type="button" class="btn-settings-test" id="btnTestStarSfx" title="Preview star chime at current volume">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+              Test Star Chime
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dedicated Audio Preview Elements -->
+  <audio id="arenaAudioPlayer" preload="none"></audio>
+  <audio id="binderAudioPlayer" preload="none"></audio>
+
+  <script src="app.js"></script>
+</body>
+</html>
