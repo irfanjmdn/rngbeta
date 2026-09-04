@@ -12,7 +12,7 @@
     binderAudioTime,
     activeModal,
   } from './lib/store.js';
-  import { connectMediaElement, getBassEnergy } from './lib/audio.js';
+  import { connectMediaElement, getBassEnergy, getAudioVisualizerData } from './lib/audio.js';
 
   import Onboarding from './components/Onboarding.svelte';
   import Hud from './components/Hud.svelte';
@@ -27,30 +27,197 @@
   let arenaAudioEl;
   let binderAudioEl;
   let auraLayerEl;
+  let visualizerCanvas;
+  let canvasCtx = null;
   let arenaFadeInterval = null;
   let binderFadeInterval = null;
 
   let rafId = null;
   let currentPulseScale = 0;
   let currentPulseOpacity = 0;
+  let rings = [];
+  let embers = [];
 
-  function updateAudioAura() {
-    const targetEnergy = getBassEnergy();
-    const lerpFactor = targetEnergy > currentPulseScale ? 0.35 : 0.15;
-    currentPulseScale += (targetEnergy * 0.20 - currentPulseScale) * lerpFactor;
-    currentPulseOpacity += (targetEnergy * 0.40 - currentPulseOpacity) * lerpFactor;
+  const TIER_VISUALIZER_CONFIG = {
+    default: {
+      color: [29, 185, 84],
+      maxRadius: 360,
+      ringSpeed: 4.5,
+      lineWidth: 2.4,
+      hasEcho: false,
+      emberCount: 0,
+    },
+    common: {
+      color: [148, 163, 184],
+      maxRadius: 320,
+      ringSpeed: 3.8,
+      lineWidth: 2.0,
+      hasEcho: false,
+      emberCount: 0,
+    },
+    uncommon: {
+      color: [16, 185, 129],
+      maxRadius: 360,
+      ringSpeed: 4.2,
+      lineWidth: 2.4,
+      hasEcho: false,
+      emberCount: 0,
+    },
+    rare: {
+      color: [59, 130, 246],
+      maxRadius: 400,
+      ringSpeed: 4.8,
+      lineWidth: 2.8,
+      hasEcho: true,
+      emberCount: 2,
+    },
+    epic: {
+      color: [168, 85, 247],
+      maxRadius: 440,
+      ringSpeed: 5.2,
+      lineWidth: 3.2,
+      hasEcho: true,
+      emberCount: 4,
+    },
+    legendary: {
+      color: [245, 158, 11],
+      maxRadius: 480,
+      ringSpeed: 5.8,
+      lineWidth: 3.6,
+      hasEcho: true,
+      emberCount: 7,
+    },
+    mythic: {
+      color: [244, 63, 94],
+      maxRadius: 520,
+      ringSpeed: 6.4,
+      lineWidth: 4.0,
+      hasEcho: true,
+      emberCount: 10,
+    },
+  };
 
+  function spawnShockwave(intensity = 1.0) {
+    const tier = $activeWinnerCard?.rarityTier || 'default';
+    const cfg = TIER_VISUALIZER_CONFIG[tier] || TIER_VISUALIZER_CONFIG.default;
+
+    rings.push({
+      radius: 14,
+      maxRadius: cfg.maxRadius * (0.85 + intensity * 0.3),
+      speed: cfg.ringSpeed * (0.85 + intensity * 0.3),
+      opacity: 0.75 + intensity * 0.25,
+      lineWidth: cfg.lineWidth * (0.85 + intensity * 0.3),
+      color: cfg.color,
+    });
+
+    if (cfg.hasEcho) {
+      setTimeout(() => {
+        rings.push({
+          radius: 14,
+          maxRadius: cfg.maxRadius * 0.75,
+          speed: cfg.ringSpeed * 0.75,
+          opacity: 0.5,
+          lineWidth: cfg.lineWidth * 0.7,
+          color: cfg.color,
+        });
+      }, 80);
+    }
+
+    if (cfg.emberCount > 0) {
+      for (let i = 0; i < cfg.emberCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = (2.2 + Math.random() * 4.5) * (0.8 + intensity * 0.4);
+        embers.push({
+          x: 0,
+          y: 0,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: 1.5 + Math.random() * 2,
+          opacity: 0.85,
+          decay: 0.022 + Math.random() * 0.02,
+          color: cfg.color,
+        });
+      }
+    }
+  }
+
+  function renderVisualizerFrame() {
+    if (!visualizerCanvas) return;
+    if (!canvasCtx) {
+      canvasCtx = visualizerCanvas.getContext('2d');
+    }
+    const ctx = canvasCtx;
+    if (!ctx) return;
+
+    const width = visualizerCanvas.clientWidth;
+    const height = visualizerCanvas.clientHeight;
+    if (visualizerCanvas.width !== width || visualizerCanvas.height !== height) {
+      visualizerCanvas.width = width;
+      visualizerCanvas.height = height;
+    }
+
+    ctx.clearRect(0, 0, width, height);
+
+    const data = getAudioVisualizerData();
+    if (data.beat && ($isArenaPlaying || $isBinderPlaying)) {
+      spawnShockwave(data.beatIntensity);
+    }
+
+    currentPulseScale += (data.bass * 0.25 - currentPulseScale) * 0.22;
+    currentPulseOpacity += (data.bass * 0.45 - currentPulseOpacity) * 0.22;
     if (auraLayerEl) {
       auraLayerEl.style.setProperty('--audio-pulse-scale', currentPulseScale.toFixed(4));
       auraLayerEl.style.setProperty('--audio-pulse-opacity', currentPulseOpacity.toFixed(4));
     }
 
-    if ($isArenaPlaying || $isBinderPlaying || currentPulseScale > 0.002) {
-      rafId = requestAnimationFrame(updateAudioAura);
+    const centerX = width / 2;
+    const centerY = height * 0.27;
+
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const r = rings[i];
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, r.radius, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(${r.color[0]}, ${r.color[1]}, ${r.color[2]}, ${r.opacity.toFixed(3)})`;
+      ctx.lineWidth = r.lineWidth;
+      ctx.shadowColor = `rgba(${r.color[0]}, ${r.color[1]}, ${r.color[2]}, 0.55)`;
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+
+      r.radius += r.speed;
+      r.opacity *= 0.94;
+
+      if (r.opacity < 0.015 || r.radius >= r.maxRadius) {
+        rings.splice(i, 1);
+      }
+    }
+
+    for (let i = embers.length - 1; i >= 0; i--) {
+      const e = embers[i];
+      ctx.beginPath();
+      ctx.arc(centerX + e.x, centerY + e.y, e.radius, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${e.color[0]}, ${e.color[1]}, ${e.color[2]}, ${e.opacity.toFixed(3)})`;
+      ctx.shadowColor = `rgba(${e.color[0]}, ${e.color[1]}, ${e.color[2]}, 0.8)`;
+      ctx.shadowBlur = 6;
+      ctx.fill();
+
+      e.x += e.vx;
+      e.y += e.vy;
+      e.vx *= 0.96;
+      e.vy *= 0.96;
+      e.opacity -= e.decay;
+
+      if (e.opacity <= 0) {
+        embers.splice(i, 1);
+      }
+    }
+
+    ctx.shadowBlur = 0;
+
+    if ($isArenaPlaying || $isBinderPlaying || rings.length > 0 || embers.length > 0 || currentPulseScale > 0.005) {
+      rafId = requestAnimationFrame(renderVisualizerFrame);
     } else {
       rafId = null;
-      currentPulseScale = 0;
-      currentPulseOpacity = 0;
+      ctx.clearRect(0, 0, width, height);
       if (auraLayerEl) {
         auraLayerEl.style.setProperty('--audio-pulse-scale', '0');
         auraLayerEl.style.setProperty('--audio-pulse-opacity', '0');
@@ -60,7 +227,7 @@
 
   function ensureAudioAuraLoop() {
     if (!rafId && typeof window !== 'undefined') {
-      rafId = requestAnimationFrame(updateAudioAura);
+      rafId = requestAnimationFrame(renderVisualizerFrame);
     }
   }
 
@@ -300,6 +467,7 @@
   function handleRollComplete(winner, isNew) {
     activeArenaTrack.set(winner);
     isShockwaveActive = true;
+    spawnShockwave(1.35);
     ensureAudioAuraLoop();
     setTimeout(() => {
       isShockwaveActive = false;
@@ -354,6 +522,13 @@
       <div class="aura-orb aura-orb-secondary"></div>
       <div class="aura-shockwave"></div>
     </div>
+
+    <!-- Audio-Reactive Radial Shockwave Canvas -->
+    <canvas
+      bind:this={visualizerCanvas}
+      class="audio-visualizer-canvas"
+      aria-hidden="true"
+    ></canvas>
 
     <Hud />
 

@@ -2834,7 +2834,20 @@ a.meta-tag.source-tag:hover strong {
   }
 }
 
+/* Radial Audio Shockwave Visualizer Canvas */
+.audio-visualizer-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .audio-visualizer-canvas {
+    display: none !important;
+  }
   .aura-orb-primary,
   .aura-orb-secondary,
   .aura-shockwave,

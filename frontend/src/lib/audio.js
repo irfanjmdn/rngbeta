@@ -75,6 +75,51 @@ export function getBassEnergy() {
   }
 }
 
+let rollingEnergyAvg = 0.35;
+let lastBeatTimestamp = 0;
+
+export function getAudioVisualizerData() {
+  if (!analyserNode || !audioDataArray) {
+    return { bass: 0, mids: 0, beat: false, beatIntensity: 0 };
+  }
+  try {
+    analyserNode.getByteFrequencyData(audioDataArray);
+
+    let bassSum = 0;
+    for (let i = 1; i <= 4; i++) {
+      bassSum += audioDataArray[i] || 0;
+    }
+    const currentBass = bassSum / (4 * 255);
+
+    let midsSum = 0;
+    for (let i = 5; i <= 14; i++) {
+      midsSum += audioDataArray[i] || 0;
+    }
+    const currentMids = midsSum / (10 * 255);
+
+    const now = performance.now();
+    let isBeat = false;
+    let beatIntensity = 0;
+
+    if (currentBass > rollingEnergyAvg * 1.25 && currentBass > 0.28 && now - lastBeatTimestamp > 210) {
+      isBeat = true;
+      beatIntensity = Math.min(1.0, (currentBass - rollingEnergyAvg) / (1.0 - rollingEnergyAvg + 0.01));
+      lastBeatTimestamp = now;
+    }
+
+    rollingEnergyAvg = rollingEnergyAvg * 0.93 + currentBass * 0.07;
+
+    return {
+      bass: currentBass,
+      mids: currentMids,
+      beat: isBeat,
+      beatIntensity,
+    };
+  } catch (e) {
+    return { bass: 0, mids: 0, beat: false, beatIntensity: 0 };
+  }
+}
+
 let sfxVolume = 0.8;
 if (typeof localStorage !== 'undefined') {
   try {
