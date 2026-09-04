@@ -299,7 +299,7 @@
         <span class="winner-artist-separator" aria-hidden="true">•</span>
         <span class="winner-release-date-wrap">
           <span class="release-prefix">Released</span>
-          <strong class="winner-release-date" id="winnerReleaseDate">{formattedReleaseDate}</strong>
+          <span class="winner-release-date" id="winnerReleaseDate">{formattedReleaseDate}</span>
         </span>
       {/if}
     </div>

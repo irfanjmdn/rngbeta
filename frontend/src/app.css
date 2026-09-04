@@ -1489,18 +1489,13 @@ body {
   flex-shrink: 0;
 }
 
-.winner-artist .release-prefix {
-  font-size: 12px;
-  color: var(--text-muted);
-  opacity: 0.75;
-}
-
+.winner-artist .release-prefix,
 .winner-artist .winner-release-date {
   font-size: 12px;
   color: var(--text-muted);
-  font-weight: 600;
-  opacity: 0.95;
-  font-family: var(--font-mono);
+  font-family: inherit;
+  font-weight: normal;
+  opacity: 0.75;
 }
 
 .source-in-prefix {
