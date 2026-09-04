@@ -751,8 +751,6 @@ body {
   border: none;
   mask-image: linear-gradient(to right, transparent 0%, black 7%, black 93%, transparent 100%);
   -webkit-mask-image: linear-gradient(to right, transparent 0%, black 7%, black 93%, transparent 100%);
-  perspective: 1100px;
-  perspective-origin: 50% 50%;
 }
 
 .reel-track {
@@ -763,7 +761,6 @@ body {
   left: 0;
   top: 0;
   will-change: transform;
-  transform-style: preserve-3d;
 }
 
 /* Single Album Card in Reel */
@@ -782,11 +779,9 @@ body {
   flex-shrink: 0;
   text-align: center;
   transform-origin: center center;
-  transform-style: preserve-3d;
-  transform: scale(var(--card-scale, 1)) translateZ(var(--card-depth-z, 0px)) rotateY(var(--card-lean-y, 0deg));
+  transform: scale(var(--card-scale, 1));
   opacity: var(--card-opacity, 1);
   transition: transform 0.12s ease-out, opacity 0.12s ease-out, border-color 0.2s ease-out;
-  will-change: transform;
 }
 
 .reel-track.is-spinning .reel-card {
@@ -859,8 +854,6 @@ body {
   width: 72px;
   height: 72px;
   margin-bottom: 8px;
-  transform-style: preserve-3d;
-  transform: translateZ(8px);
 }
 
 .reel-card-art {
@@ -897,7 +890,6 @@ body {
   object-fit: cover;
   z-index: 5;
   background: #121722;
-  transform: translateZ(12px);
 }
 
 .reel-card-title {
@@ -909,7 +901,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   margin-bottom: 2px;
-  transform: translateZ(10px);
 }
 
 .reel-card-artist {
@@ -920,7 +911,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   margin-bottom: 4px;
-  transform: translateZ(9px);
 }
 
 .reel-card-tier {
@@ -928,7 +918,6 @@ body {
   font-family: var(--font-mono);
   font-weight: 700;
   text-transform: uppercase;
-  transform: translateZ(11px);
 }
 
 /* Winner Spotlight Box with Impact Slam */
