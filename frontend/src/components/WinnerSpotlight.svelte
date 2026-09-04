@@ -240,15 +240,6 @@
     <div class="winner-header-row">
       {#if $activeWinnerCard}
         <div class="winner-header-badges">
-          {#if !isNewUnlock}
-            <span
-              id="winnerCountBadge"
-              class="winner-foil-stamp is-duplicate"
-              style="--tier-color: {$activeWinnerCard.rarityColor};"
-            >
-              <span class="stamp-text">DUPLICATE</span>
-            </span>
-          {/if}
           {#if luckPercentage}
             <span
               class="winner-odds-pill winner-chance-pill"
@@ -257,6 +248,15 @@
             >
               <span class="odds-label chance-label">CHANCE</span>
               <span class="odds-val chance-val">{luckPercentage}</span>
+            </span>
+          {/if}
+          {#if !isNewUnlock}
+            <span
+              id="winnerCountBadge"
+              class="winner-foil-stamp is-duplicate"
+              style="--tier-color: {$activeWinnerCard.rarityColor};"
+            >
+              <span class="stamp-text">DUPLICATE</span>
             </span>
           {/if}
         </div>
@@ -297,7 +297,10 @@
       <span class="artist-name">{$activeWinnerCard ? $activeWinnerCard.artist : 'Watch multiple album covers spin past in real-time'}</span>
       {#if $activeWinnerCard && formattedReleaseDate && formattedReleaseDate !== '-'}
         <span class="winner-artist-separator" aria-hidden="true">•</span>
-        <span class="winner-release-date" id="winnerReleaseDate">{formattedReleaseDate}</span>
+        <span class="winner-release-date-wrap">
+          <span class="release-prefix">Released</span>
+          <strong class="winner-release-date" id="winnerReleaseDate">{formattedReleaseDate}</strong>
+        </span>
       {/if}
     </div>
 
