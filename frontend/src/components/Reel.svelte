@@ -20,7 +20,7 @@
     playFanfareSound,
     getAudioContext,
   } from '../lib/audio.js';
-  import { isPlaceholderCover, fetchAlbumArt } from '../lib/artCache.js';
+  import { isPlaceholderCover, clientArtCache } from '../lib/artCache.js';
 
   export let onRollComplete = () => {};
 
@@ -79,15 +79,13 @@
       <div class="reel-card-tier" style="color:${card.rarityColor};">${htmlEscape(card.rarityName)}</div>
     `;
 
-    if (card.spotify_id && isPlaceholder) {
+    if (card.spotify_id && clientArtCache[card.spotify_id]) {
       const artImg = div.querySelector('.reel-card-art');
-      fetchAlbumArt(card.spotify_id).then((url) => {
-        if (url && artImg) {
-          card.album_cover_url = url;
-          artImg.src = url;
-          artImg.classList.remove('is-placeholder-art');
-        }
-      });
+      if (artImg) {
+        card.album_cover_url = clientArtCache[card.spotify_id];
+        artImg.src = clientArtCache[card.spotify_id];
+        artImg.classList.remove('is-placeholder-art');
+      }
     }
 
     return div;

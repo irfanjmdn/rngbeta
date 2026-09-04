@@ -267,6 +267,15 @@ def compute_dynamic_rarity_tracks(playlists_data):
         drop_chance_str = f"1 in {target_odds:,}"
         tier_specs[key] = (tier, name, color, drop_chance_str, track_weight)
 
+    META_CACHE_FILE = os.path.join(DATA_DIR, "track_meta_cache.json")
+    meta_cache = {}
+    if os.path.exists(META_CACHE_FILE):
+        try:
+            with open(META_CACHE_FILE, "r", encoding="utf-8") as f:
+                meta_cache = json.load(f)
+        except Exception:
+            meta_cache = {}
+
     all_tracks = []
     for key, t in track_map.items():
         p_list = t["playlists"]
@@ -296,7 +305,8 @@ def compute_dynamic_rarity_tracks(playlists_data):
             "rarityName": rarity_name,
             "rarityColor": rarity_color,
             "dropChance": drop_chance,
-            "weight": weight
+            "weight": weight,
+            "release_date": meta_cache.get(spotify_id, "")
         })
 
     return all_tracks
@@ -321,31 +331,72 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception:
                     cache = {}
 
-            if track_id in cache and cache[track_id]:
-                body = json.dumps({"id": track_id, "album_cover_url": cache[track_id]}).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-                return
+            meta_cache_file = os.path.join(DATA_DIR, "track_meta_cache.json")
+            meta_cache = {}
+            if os.path.exists(meta_cache_file):
+                try:
+                    with open(meta_cache_file, "r", encoding="utf-8") as f:
+                        meta_cache = json.load(f)
+                except Exception:
+                    meta_cache = {}
 
-            # Fetch on-demand via Spotify oEmbed
-            album_url = ""
-            try:
-                o_url = f"https://open.spotify.com/oembed?url=https://open.spotify.com/track/{track_id}"
-                req = urllib.request.Request(o_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-                with urllib.request.urlopen(req, timeout=3.5) as resp:
-                    odata = json.loads(resp.read().decode("utf-8"))
-                    album_url = odata.get("thumbnail_url", "")
-                    if album_url:
-                        cache[track_id] = album_url
-                        with open(art_cache_file, "w", encoding="utf-8") as f:
-                            json.dump(cache, f, indent=2)
-            except Exception as e:
-                print(f"DEBUG art fetch error for {track_id}: {e}", flush=True)
+            album_url = cache.get(track_id, "")
+            rel_date = meta_cache.get(track_id, "")
 
-            body = json.dumps({"id": track_id, "album_cover_url": album_url}).encode("utf-8")
+            # Fetch on-demand via Spotify embed if missing release date
+            if not rel_date:
+                try:
+                    embed_url = f"https://open.spotify.com/embed/track/{track_id}"
+                    req = urllib.request.Request(embed_url, headers=HEADERS)
+                    with urllib.request.urlopen(req, timeout=3.5) as resp:
+                        html = resp.read().decode("utf-8", errors="ignore")
+                    m_date = re.search(r'"releaseDate":\s*\{\s*"isoString":\s*"([^"]+)"', html)
+                    if m_date:
+                        rel_date = m_date.group(1)
+                except Exception as e:
+                    print(f"DEBUG embed date fetch error for {track_id}: {e}", flush=True)
+
+            # Fallback to iTunes song search if Spotify embed failed or was rate limited
+            if not rel_date:
+                q_title = query.get("title", [""])[0]
+                q_artist = query.get("artist", [""])[0]
+                query_term = f"{q_artist} {q_title}".strip()
+                if query_term:
+                    try:
+                        itunes_url = f"https://itunes.apple.com/search?term={urllib.parse.quote(query_term)}&entity=song&limit=1"
+                        req = urllib.request.Request(itunes_url, headers={"User-Agent": "Mozilla/5.0"})
+                        with urllib.request.urlopen(req, timeout=3.5) as resp:
+                            idata = json.loads(resp.read().decode("utf-8"))
+                            if idata.get("results"):
+                                rel_date = idata["results"][0].get("releaseDate", "")
+                    except Exception as e:
+                        print(f"DEBUG itunes date search error for {query_term}: {e}", flush=True)
+
+            if rel_date and track_id not in meta_cache:
+                meta_cache[track_id] = rel_date
+                with open(meta_cache_file, "w", encoding="utf-8") as f:
+                    json.dump(meta_cache, f, indent=2)
+
+            # Fetch on-demand via Spotify oEmbed if missing cover art
+            if not album_url:
+                try:
+                    o_url = f"https://open.spotify.com/oembed?url=https://open.spotify.com/track/{track_id}"
+                    req = urllib.request.Request(o_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                    with urllib.request.urlopen(req, timeout=3.5) as resp:
+                        odata = json.loads(resp.read().decode("utf-8"))
+                        album_url = odata.get("thumbnail_url", "")
+                        if album_url:
+                            cache[track_id] = album_url
+                            with open(art_cache_file, "w", encoding="utf-8") as f:
+                                json.dump(cache, f, indent=2)
+                except Exception as e:
+                    print(f"DEBUG art fetch error for {track_id}: {e}", flush=True)
+
+            body = json.dumps({
+                "id": track_id,
+                "album_cover_url": album_url,
+                "release_date": rel_date
+            }).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))

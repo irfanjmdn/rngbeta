@@ -7,7 +7,7 @@
     isArenaPlaying,
     arenaAudioTime,
   } from '../lib/store.js';
-  import { isPlaceholderCover, fetchAlbumArt } from '../lib/artCache.js';
+  import { isPlaceholderCover, fetchTrackDetails } from '../lib/artCache.js';
 
   export let onToggleAudio = () => {};
   export let onSeekAudio = (ratio) => {};
@@ -15,7 +15,29 @@
   let scrubTrackEl;
   let isDragging = false;
   let albumCoverLoaded = '';
+  let releaseDateLoaded = '';
 
+  function formatReleaseDate(raw) {
+    if (!raw) return '-';
+    const clean = raw.split('T')[0];
+    const parts = clean.split('-');
+    if (parts.length === 3) {
+      const year = parts[0];
+      const monthIndex = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      if (monthIndex >= 0 && monthIndex < 12 && !isNaN(day)) {
+        return `${months[monthIndex]} ${day}, ${year}`;
+      }
+      return clean;
+    }
+    if (parts.length === 1 && parts[0].length === 4) {
+      return parts[0];
+    }
+    return clean;
+  }
+
+  $: formattedReleaseDate = formatReleaseDate(releaseDateLoaded || $activeWinnerCard?.release_date);
   $: isStarred = $activeWinnerCard ? $starredTrackIds.has($activeWinnerCard.id) : false;
   $: ownedCount = $activeWinnerCard ? $gameInventory[$activeWinnerCard.id] || 1 : 0;
   $: isNewUnlock = ownedCount === 1;
@@ -26,12 +48,23 @@
       $activeWinnerCard.cover_url ||
       $activeWinnerCard.playlist_cover_url ||
       "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%231e293b'/%3E%3C/svg%3E";
+    releaseDateLoaded = $activeWinnerCard.release_date || '';
 
-    if ($activeWinnerCard.spotify_id && isPlaceholderCover($activeWinnerCard)) {
-      fetchAlbumArt($activeWinnerCard.spotify_id).then((url) => {
-        if (url) {
-          albumCoverLoaded = url;
-          if ($activeWinnerCard) $activeWinnerCard.album_cover_url = url;
+    if ($activeWinnerCard.spotify_id && (!releaseDateLoaded || isPlaceholderCover($activeWinnerCard))) {
+      fetchTrackDetails(
+        $activeWinnerCard.spotify_id,
+        $activeWinnerCard.title,
+        $activeWinnerCard.artist
+      ).then((details) => {
+        if (details) {
+          if (details.album_cover_url) {
+            albumCoverLoaded = details.album_cover_url;
+            if ($activeWinnerCard) $activeWinnerCard.album_cover_url = details.album_cover_url;
+          }
+          if (details.release_date) {
+            releaseDateLoaded = details.release_date;
+            if ($activeWinnerCard) $activeWinnerCard.release_date = details.release_date;
+          }
         }
       });
     }
@@ -167,9 +200,11 @@
           <span
             id="winnerCountBadge"
             class="winner-foil-stamp {isNewUnlock ? 'is-first-seen' : 'is-duplicate'}"
-            style="--tier-color: {$activeWinnerCard.rarityColor};"
+            style="--tier-color: {isNewUnlock ? '#F59E0B' : $activeWinnerCard.rarityColor};"
           >
-            <span class="stamp-icon">{isNewUnlock ? '✦' : '◈'}</span>
+            {#if isNewUnlock}
+              <span class="stamp-icon">✦</span>
+            {/if}
             <span class="stamp-text">{isNewUnlock ? 'FIRST SEEN' : 'DUPLICATE'}</span>
           </span>
           {#if $activeWinnerCard.dropChance}
@@ -297,8 +332,8 @@
             {$activeWinnerCard ? $activeWinnerCard.playlist_name : '-'}
           </strong>
         </a>
-        <span class="meta-tag odds-tag">
-          Odds: <strong class="winner-odds" id="winnerOdds">{$activeWinnerCard ? $activeWinnerCard.dropChance : '-'}</strong>
+        <span class="meta-tag release-date-tag" id="winnerReleaseDateTag">
+          Released: <strong class="winner-release-date" id="winnerReleaseDate">{formattedReleaseDate}</strong>
         </span>
       </div>
 

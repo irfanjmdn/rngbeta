@@ -3,6 +3,7 @@
  */
 
 export const clientArtCache = {};
+export const clientReleaseDateCache = {};
 
 export function isPlaceholderCover(card) {
   if (!card) return true;
@@ -12,19 +13,38 @@ export function isPlaceholderCover(card) {
   return false;
 }
 
-export async function fetchAlbumArt(spotifyId) {
+export async function fetchTrackDetails(spotifyId, title = '', artist = '') {
   if (!spotifyId) return null;
-  if (clientArtCache[spotifyId]) return clientArtCache[spotifyId];
+  if (clientArtCache[spotifyId] && clientReleaseDateCache[spotifyId]) {
+    return {
+      album_cover_url: clientArtCache[spotifyId],
+      release_date: clientReleaseDateCache[spotifyId]
+    };
+  }
 
   try {
-    const res = await fetch(`/api/art?id=${encodeURIComponent(spotifyId)}`);
+    const q = new URLSearchParams({ id: spotifyId });
+    if (title) q.append('title', title);
+    if (artist) q.append('artist', artist);
+    const res = await fetch(`/api/art?${q.toString()}`);
     if (res.ok) {
       const data = await res.json();
       if (data.album_cover_url) {
         clientArtCache[spotifyId] = data.album_cover_url;
-        return data.album_cover_url;
       }
+      if (data.release_date) {
+        clientReleaseDateCache[spotifyId] = data.release_date;
+      }
+      return {
+        album_cover_url: data.album_cover_url || clientArtCache[spotifyId] || null,
+        release_date: data.release_date || clientReleaseDateCache[spotifyId] || null
+      };
     }
   } catch (e) {}
   return null;
+}
+
+export async function fetchAlbumArt(spotifyId) {
+  const details = await fetchTrackDetails(spotifyId);
+  return details?.album_cover_url || null;
 }

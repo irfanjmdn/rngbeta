@@ -1305,17 +1305,26 @@ body {
   text-shadow: 0 0 6px var(--tier-color, #FFF);
 }
 
-/* FIRST SEEN Variant */
+/* FIRST SEEN Variant (Gold Collector Foil) */
 .winner-foil-stamp.is-first-seen {
-  --stamp-base-bg: rgba(16, 185, 129, 0.12);
-  border-color: var(--tier-color, #10B981);
+  --stamp-base-bg: rgba(245, 158, 11, 0.14);
+  border-color: #F59E0B;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 0 12px rgba(245, 158, 11, 0.35);
+}
+
+.winner-foil-stamp.is-first-seen .stamp-icon {
+  font-size: 10px;
+  line-height: 1;
+  color: #FBBF24;
+  text-shadow: 0 0 6px #F59E0B;
 }
 
 .winner-foil-stamp.is-first-seen .stamp-text {
-  background: linear-gradient(180deg, #FFFFFF 20%, #E2E8F0 100%);
+  background: linear-gradient(180deg, #FFFBEB 0%, #FBBF24 50%, #D97706 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   font-weight: 800;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
 }
 
 /* DUPLICATE Variant */
