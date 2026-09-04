@@ -662,13 +662,13 @@ body {
 .spinner-machine-wrap {
   width: 100%;
   max-width: 940px;
-  background: var(--bg-surface);
-  border: 2px solid var(--border-highlight);
-  border-radius: var(--radius-lg);
-  padding: 20px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 12px 0;
   position: relative;
   margin-bottom: 24px;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.8);
+  box-shadow: none;
 }
 
 /* Brake Needles with Caliper Pinch Dynamics */
@@ -757,11 +757,10 @@ body {
   height: 174px;
   overflow: hidden;
   position: relative;
-  background: #080B10;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
-  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  background: transparent;
+  border: none;
+  mask-image: linear-gradient(to right, transparent 0%, black 7%, black 93%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 7%, black 93%, transparent 100%);
 }
 
 .reel-track {
