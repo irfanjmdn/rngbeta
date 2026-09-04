@@ -6,6 +6,7 @@
     gameInventory,
     isArenaPlaying,
     arenaAudioTime,
+    rngTracks,
   } from '../lib/store.js';
   import { isPlaceholderCover, fetchTrackDetails } from '../lib/artCache.js';
 
@@ -16,6 +17,48 @@
   let isDragging = false;
   let albumCoverLoaded = '';
   let releaseDateLoaded = '';
+
+  const defaultTierLuck = {
+    mythic: '0.5%',
+    legendary: '2.5%',
+    epic: '7%',
+    rare: '14%',
+    uncommon: '26%',
+    common: '50%',
+  };
+
+  $: luckPercentage = (() => {
+    if (!$activeWinnerCard) return '';
+    const tier = $activeWinnerCard.rarityTier;
+    if ($rngTracks && $rngTracks.length > 0) {
+      const totalWeight = $rngTracks.reduce((sum, t) => sum + (t.weight || 0), 0);
+      if (totalWeight > 0) {
+        const tierWeight = $rngTracks
+          .filter((t) => t.rarityTier === tier)
+          .reduce((sum, t) => sum + (t.weight || 0), 0);
+        if (tierWeight > 0) {
+          const prob = (tierWeight / totalWeight) * 100;
+          const formatted = prob.toFixed(1);
+          return formatted.endsWith('.0') ? `${Math.round(prob)}%` : `${formatted}%`;
+        }
+      }
+    }
+    if (tier && defaultTierLuck[tier]) {
+      return defaultTierLuck[tier];
+    }
+    if ($activeWinnerCard.dropChance) {
+      const match = $activeWinnerCard.dropChance.match(/1\s+in\s+([\d,]+)/i);
+      if (match) {
+        const n = parseFloat(match[1].replace(/,/g, ''));
+        if (n > 0) {
+          const prob = (1 / n) * 100;
+          const formatted = prob.toFixed(1);
+          return formatted.endsWith('.0') ? `${Math.round(prob)}%` : `${formatted}%`;
+        }
+      }
+    }
+    return '';
+  })();
 
   function formatReleaseDate(raw) {
     if (!raw) return '-';
@@ -207,14 +250,14 @@
             {/if}
             <span class="stamp-text">{isNewUnlock ? 'FIRST SEEN' : 'DUPLICATE'}</span>
           </span>
-          {#if $activeWinnerCard.dropChance}
+          {#if luckPercentage}
             <span
-              class="winner-odds-pill"
+              class="winner-odds-pill winner-luck-pill"
               id="winnerOddsStamp"
               style="--tier-color: {$activeWinnerCard.rarityColor};"
             >
-              <span class="odds-label">ODDS</span>
-              <span class="odds-val">{$activeWinnerCard.dropChance.toUpperCase()}</span>
+              <span class="odds-label luck-label">LUCK</span>
+              <span class="odds-val luck-val">{luckPercentage}</span>
             </span>
           {/if}
         </div>
