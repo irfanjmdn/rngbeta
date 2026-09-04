@@ -1337,9 +1337,10 @@ body {
   color: #CBD5E1;
 }
 
-/* Roll Luck / Odds Pill */
+/* Roll Chance / Luck / Odds Pill */
 .winner-odds-pill,
-.winner-luck-pill {
+.winner-luck-pill,
+.winner-chance-pill {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1356,7 +1357,8 @@ body {
 }
 
 .winner-odds-pill .odds-label,
-.winner-luck-pill .luck-label {
+.winner-luck-pill .luck-label,
+.winner-chance-pill .chance-label {
   font-size: 9px;
   font-weight: 800;
   opacity: 0.7;
@@ -1365,7 +1367,8 @@ body {
 }
 
 .winner-odds-pill .odds-val,
-.winner-luck-pill .luck-val {
+.winner-luck-pill .luck-val,
+.winner-chance-pill .chance-val {
   color: var(--tier-color, #38BDF8);
   font-weight: 800;
 }
@@ -1419,6 +1422,37 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.winner-artist .artist-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.winner-artist-separator {
+  margin: 0 6px;
+  opacity: 0.45;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.winner-artist .winner-release-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  opacity: 0.85;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+
+.source-in-prefix {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  user-select: none;
 }
 
 /* Interactive Audio Seeker & Scrubber Controls */

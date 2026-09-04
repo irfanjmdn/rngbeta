@@ -240,24 +240,23 @@
     <div class="winner-header-row">
       {#if $activeWinnerCard}
         <div class="winner-header-badges">
-          <span
-            id="winnerCountBadge"
-            class="winner-foil-stamp {isNewUnlock ? 'is-first-seen' : 'is-duplicate'}"
-            style="--tier-color: {isNewUnlock ? '#F59E0B' : $activeWinnerCard.rarityColor};"
-          >
-            {#if isNewUnlock}
-              <span class="stamp-icon">✦</span>
-            {/if}
-            <span class="stamp-text">{isNewUnlock ? 'FIRST SEEN' : 'DUPLICATE'}</span>
-          </span>
+          {#if !isNewUnlock}
+            <span
+              id="winnerCountBadge"
+              class="winner-foil-stamp is-duplicate"
+              style="--tier-color: {$activeWinnerCard.rarityColor};"
+            >
+              <span class="stamp-text">DUPLICATE</span>
+            </span>
+          {/if}
           {#if luckPercentage}
             <span
-              class="winner-odds-pill winner-luck-pill"
+              class="winner-odds-pill winner-chance-pill"
               id="winnerOddsStamp"
               style="--tier-color: {$activeWinnerCard.rarityColor};"
             >
-              <span class="odds-label luck-label">LUCK</span>
-              <span class="odds-val luck-val">{luckPercentage}</span>
+              <span class="odds-label chance-label">CHANCE</span>
+              <span class="odds-val chance-val">{luckPercentage}</span>
             </span>
           {/if}
         </div>
@@ -295,7 +294,11 @@
       {$activeWinnerCard ? $activeWinnerCard.title : 'Press ROLL to Spin Albums'}
     </div>
     <div class="winner-artist" id="winnerArtist">
-      {$activeWinnerCard ? $activeWinnerCard.artist : 'Watch multiple album covers spin past in real-time'}
+      <span class="artist-name">{$activeWinnerCard ? $activeWinnerCard.artist : 'Watch multiple album covers spin past in real-time'}</span>
+      {#if $activeWinnerCard && formattedReleaseDate && formattedReleaseDate !== '-'}
+        <span class="winner-artist-separator" aria-hidden="true">•</span>
+        <span class="winner-release-date" id="winnerReleaseDate">{formattedReleaseDate}</span>
+      {/if}
     </div>
 
     {#if $activeWinnerCard && $activeWinnerCard.preview_url}
@@ -354,6 +357,9 @@
 
     <div class="winner-footer-row">
       <div class="winner-meta-tags">
+        {#if $activeWinnerCard}
+          <span class="source-in-prefix">in</span>
+        {/if}
         <a
           class="meta-tag source-tag"
           id="winnerSourceLink"
@@ -375,9 +381,6 @@
             {$activeWinnerCard ? $activeWinnerCard.playlist_name : '-'}
           </strong>
         </a>
-        <span class="meta-tag release-date-tag" id="winnerReleaseDateTag">
-          Released: <strong class="winner-release-date" id="winnerReleaseDate">{formattedReleaseDate}</strong>
-        </span>
       </div>
 
       {#if $activeWinnerCard && ($activeWinnerCard.uri || $activeWinnerCard.spotify_url)}
