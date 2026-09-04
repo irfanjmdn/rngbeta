@@ -665,16 +665,16 @@ body {
   background: transparent;
   border: none;
   border-radius: 0;
-  padding: 12px 0;
+  padding: 0;
   position: relative;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   box-shadow: none;
 }
 
 /* Brake Needles with Caliper Pinch Dynamics */
 .reel-pointer-top {
   position: absolute;
-  top: 0;
+  top: 9px;
   left: 50%;
   transform: translateX(-50%);
   width: 0;
@@ -689,7 +689,7 @@ body {
 
 .reel-pointer-bottom {
   position: absolute;
-  bottom: 0;
+  bottom: 9px;
   left: 50%;
   transform: translateX(-50%);
   width: 0;
@@ -754,7 +754,7 @@ body {
 /* Carousel Viewport */
 .reel-viewport {
   width: 100%;
-  height: 174px;
+  height: 216px;
   overflow: hidden;
   position: relative;
   background: transparent;
