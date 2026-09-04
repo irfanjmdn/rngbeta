@@ -12,7 +12,6 @@
     binderAudioTime,
     activeModal,
   } from './lib/store.js';
-  import { connectMediaElement, getBassEnergy, getAudioVisualizerData } from './lib/audio.js';
 
   import Onboarding from './components/Onboarding.svelte';
   import Hud from './components/Hud.svelte';
@@ -26,71 +25,68 @@
   let reelComponent;
   let arenaAudioEl;
   let binderAudioEl;
-  let auraLayerEl;
   let visualizerCanvas;
   let canvasCtx = null;
   let arenaFadeInterval = null;
   let binderFadeInterval = null;
 
   let rafId = null;
-  let currentPulseScale = 0;
-  let currentPulseOpacity = 0;
   let rings = [];
   let embers = [];
 
   const TIER_VISUALIZER_CONFIG = {
     default: {
       color: [29, 185, 84],
-      maxRadius: 360,
-      ringSpeed: 4.5,
-      lineWidth: 2.4,
+      maxRadius: 380,
+      ringSpeed: 6.2,
+      lineWidth: 2.5,
       hasEcho: false,
       emberCount: 0,
     },
     common: {
       color: [148, 163, 184],
-      maxRadius: 320,
-      ringSpeed: 3.8,
-      lineWidth: 2.0,
+      maxRadius: 340,
+      ringSpeed: 5.6,
+      lineWidth: 2.2,
       hasEcho: false,
       emberCount: 0,
     },
     uncommon: {
       color: [16, 185, 129],
-      maxRadius: 360,
-      ringSpeed: 4.2,
-      lineWidth: 2.4,
+      maxRadius: 380,
+      ringSpeed: 6.0,
+      lineWidth: 2.5,
       hasEcho: false,
       emberCount: 0,
     },
     rare: {
       color: [59, 130, 246],
-      maxRadius: 400,
-      ringSpeed: 4.8,
+      maxRadius: 420,
+      ringSpeed: 6.8,
       lineWidth: 2.8,
       hasEcho: true,
       emberCount: 2,
     },
     epic: {
       color: [168, 85, 247],
-      maxRadius: 440,
-      ringSpeed: 5.2,
+      maxRadius: 460,
+      ringSpeed: 7.4,
       lineWidth: 3.2,
       hasEcho: true,
       emberCount: 4,
     },
     legendary: {
       color: [245, 158, 11],
-      maxRadius: 480,
-      ringSpeed: 5.8,
+      maxRadius: 500,
+      ringSpeed: 8.2,
       lineWidth: 3.6,
       hasEcho: true,
       emberCount: 7,
     },
     mythic: {
       color: [244, 63, 94],
-      maxRadius: 520,
-      ringSpeed: 6.4,
+      maxRadius: 540,
+      ringSpeed: 9.0,
       lineWidth: 4.0,
       hasEcho: true,
       emberCount: 10,
@@ -103,10 +99,10 @@
 
     rings.push({
       radius: 14,
-      maxRadius: cfg.maxRadius * (0.85 + intensity * 0.3),
-      speed: cfg.ringSpeed * (0.85 + intensity * 0.3),
-      opacity: 0.75 + intensity * 0.25,
-      lineWidth: cfg.lineWidth * (0.85 + intensity * 0.3),
+      maxRadius: cfg.maxRadius * (0.85 + intensity * 0.25),
+      speed: cfg.ringSpeed * (0.9 + intensity * 0.25),
+      opacity: 0.8 + intensity * 0.2,
+      lineWidth: cfg.lineWidth * (0.9 + intensity * 0.25),
       color: cfg.color,
     });
 
@@ -115,26 +111,26 @@
         rings.push({
           radius: 14,
           maxRadius: cfg.maxRadius * 0.75,
-          speed: cfg.ringSpeed * 0.75,
-          opacity: 0.5,
-          lineWidth: cfg.lineWidth * 0.7,
+          speed: cfg.ringSpeed * 0.78,
+          opacity: 0.55,
+          lineWidth: cfg.lineWidth * 0.75,
           color: cfg.color,
         });
-      }, 80);
+      }, 70);
     }
 
     if (cfg.emberCount > 0) {
       for (let i = 0; i < cfg.emberCount; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const speed = (2.2 + Math.random() * 4.5) * (0.8 + intensity * 0.4);
+        const speed = (3.0 + Math.random() * 5.0) * (0.85 + intensity * 0.35);
         embers.push({
           x: 0,
           y: 0,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed,
           radius: 1.5 + Math.random() * 2,
-          opacity: 0.85,
-          decay: 0.022 + Math.random() * 0.02,
+          opacity: 0.9,
+          decay: 0.028 + Math.random() * 0.02,
           color: cfg.color,
         });
       }
@@ -158,18 +154,6 @@
 
     ctx.clearRect(0, 0, width, height);
 
-    const data = getAudioVisualizerData();
-    if (data.beat && ($isArenaPlaying || $isBinderPlaying)) {
-      spawnShockwave(data.beatIntensity);
-    }
-
-    currentPulseScale += (data.bass * 0.25 - currentPulseScale) * 0.22;
-    currentPulseOpacity += (data.bass * 0.45 - currentPulseOpacity) * 0.22;
-    if (auraLayerEl) {
-      auraLayerEl.style.setProperty('--audio-pulse-scale', currentPulseScale.toFixed(4));
-      auraLayerEl.style.setProperty('--audio-pulse-opacity', currentPulseOpacity.toFixed(4));
-    }
-
     const centerX = width / 2;
     const centerY = height * 0.27;
 
@@ -184,7 +168,7 @@
       ctx.stroke();
 
       r.radius += r.speed;
-      r.opacity *= 0.94;
+      r.opacity *= 0.93;
 
       if (r.opacity < 0.015 || r.radius >= r.maxRadius) {
         rings.splice(i, 1);
@@ -202,8 +186,8 @@
 
       e.x += e.vx;
       e.y += e.vy;
-      e.vx *= 0.96;
-      e.vy *= 0.96;
+      e.vx *= 0.95;
+      e.vy *= 0.95;
       e.opacity -= e.decay;
 
       if (e.opacity <= 0) {
@@ -213,19 +197,15 @@
 
     ctx.shadowBlur = 0;
 
-    if ($isArenaPlaying || $isBinderPlaying || rings.length > 0 || embers.length > 0 || currentPulseScale > 0.005) {
+    if (rings.length > 0 || embers.length > 0) {
       rafId = requestAnimationFrame(renderVisualizerFrame);
     } else {
       rafId = null;
       ctx.clearRect(0, 0, width, height);
-      if (auraLayerEl) {
-        auraLayerEl.style.setProperty('--audio-pulse-scale', '0');
-        auraLayerEl.style.setProperty('--audio-pulse-opacity', '0');
-      }
     }
   }
 
-  function ensureAudioAuraLoop() {
+  function ensureVisualizerLoop() {
     if (!rafId && typeof window !== 'undefined') {
       rafId = requestAnimationFrame(renderVisualizerFrame);
     }
@@ -324,7 +304,6 @@
     if (!arenaAudioEl || !url) return;
 
     try {
-      connectMediaElement(arenaAudioEl);
       arenaAudioEl.pause();
       arenaAudioEl.volume = 1;
       if (arenaAudioEl.src !== url) {
@@ -332,7 +311,6 @@
       }
       arenaAudioEl.currentTime = startTime;
       arenaAudioEl.play().catch(() => isArenaPlaying.set(false));
-      ensureAudioAuraLoop();
     } catch (e) {
       isArenaPlaying.set(false);
     }
@@ -347,9 +325,7 @@
       if (!arenaAudioEl.src || !arenaAudioEl.src.includes(track.preview_url)) {
         playArenaAudio(track.preview_url);
       } else {
-        connectMediaElement(arenaAudioEl);
         arenaAudioEl.play().catch(() => isArenaPlaying.set(false));
-        ensureAudioAuraLoop();
       }
     } else {
       arenaAudioEl.pause();
@@ -376,7 +352,6 @@
     }
 
     try {
-      connectMediaElement(binderAudioEl);
       binderAudioEl.pause();
       binderAudioEl.volume = 1;
       if (binderAudioEl.src !== card.preview_url) {
@@ -384,7 +359,6 @@
       }
       binderAudioEl.currentTime = 0;
       binderAudioEl.play().catch(() => isBinderPlaying.set(false));
-      ensureAudioAuraLoop();
     } catch (e) {
       isBinderPlaying.set(false);
     }
@@ -398,9 +372,7 @@
       if (!binderAudioEl.src || !binderAudioEl.src.includes($activeBinderTrack.preview_url)) {
         playBinderTrack($activeBinderTrack);
       } else {
-        connectMediaElement(binderAudioEl);
         binderAudioEl.play().catch(() => isBinderPlaying.set(false));
-        ensureAudioAuraLoop();
       }
     } else {
       binderAudioEl.pause();
@@ -468,7 +440,7 @@
     activeArenaTrack.set(winner);
     isShockwaveActive = true;
     spawnShockwave(1.35);
-    ensureAudioAuraLoop();
+    ensureVisualizerLoop();
     setTimeout(() => {
       isShockwaveActive = false;
     }, 480);
@@ -513,7 +485,6 @@
   <div class="game-viewport {$isCrateReady ? '' : 'hidden'}" id="gameArenaScreen">
     <!-- Ambient Reactive Aura Layer -->
     <div
-      bind:this={auraLayerEl}
       class="ambient-aura-layer {$isSpinning ? 'is-spinning' : ''} {isShockwaveActive ? 'shockwave-flash' : ''}"
       aria-hidden="true"
       style="--tier-glow-color: {currentAura.glow}; --tier-glow-accent: {currentAura.accent};"
@@ -558,11 +529,7 @@
     bind:this={arenaAudioEl}
     crossorigin="anonymous"
     preload="none"
-    on:play={() => {
-      connectMediaElement(arenaAudioEl);
-      isArenaPlaying.set(true);
-      ensureAudioAuraLoop();
-    }}
+    on:play={() => isArenaPlaying.set(true)}
     on:pause={() => isArenaPlaying.set(false)}
     on:ended={() => {
       isArenaPlaying.set(false);
@@ -591,11 +558,7 @@
     bind:this={binderAudioEl}
     crossorigin="anonymous"
     preload="none"
-    on:play={() => {
-      connectMediaElement(binderAudioEl);
-      isBinderPlaying.set(true);
-      ensureAudioAuraLoop();
-    }}
+    on:play={() => isBinderPlaying.set(true)}
     on:pause={() => isBinderPlaying.set(false)}
     on:ended={() => {
       isBinderPlaying.set(false);
