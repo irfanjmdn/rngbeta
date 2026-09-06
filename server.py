@@ -654,17 +654,17 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
             def log_msg(text, level="info"):
                 send_event({"type": "log", "level": level, "message": text, "time": time.strftime("%H:%M:%S")})
 
-            is_lastfm = profile_url.startswith("lastfm:") or "last.fm/user/" in profile_url.lower()
-            if is_lastfm:
-                if profile_url.startswith("lastfm:"):
-                    lastfm_user = profile_url.split("lastfm:")[1].strip()
-                else:
-                    lastfm_user = profile_url.split("last.fm/user/")[1].split("/")[0].split("?")[0].strip()
-                log_msg(f"Target Last.fm Account: {lastfm_user}", "info")
-                u_info, lf_tracks = fetch_lastfm_crate(lastfm_user, sse_log_fn=lambda m, lvl="info": log_msg(m, lvl))
-                if not lf_tracks:
-                    send_event({"type": "error", "message": f"Could not find tracks for Last.fm user '{lastfm_user}'."})
-                    return
+            lastfm_user = profile_url
+            if profile_url.startswith("lastfm:"):
+                lastfm_user = profile_url.split("lastfm:")[1].strip()
+            elif "last.fm/user/" in profile_url.lower():
+                lastfm_user = profile_url.split("last.fm/user/")[1].split("/")[0].split("?")[0].strip()
+
+            log_msg(f"Target Last.fm Account: {lastfm_user}", "info")
+            u_info, lf_tracks = fetch_lastfm_crate(lastfm_user, sse_log_fn=lambda m, lvl="info": log_msg(m, lvl))
+            if not lf_tracks:
+                send_event({"type": "error", "message": f"Could not find tracks for Last.fm user '{lastfm_user}'."})
+                return
 
                 mythic_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "mythic")
                 legend_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "legendary")

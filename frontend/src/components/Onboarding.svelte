@@ -6,8 +6,7 @@
   } from '../lib/store.js';
   import { fetchAndBuildCrate } from '../lib/sse.js';
 
-  let profileUrl = 'https://open.spotify.com/user/2jp1yf3h1h49zye21bxnxk0w5';
-  let forceRefresh = false;
+  let username = 'rj';
   let terminalEl;
 
   $: if ($debugLogs && terminalEl) {
@@ -18,8 +17,8 @@
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!profileUrl.trim()) return;
-    fetchAndBuildCrate(profileUrl.trim(), forceRefresh);
+    if (!username.trim()) return;
+    fetchAndBuildCrate(username.trim());
   }
 </script>
 
@@ -28,29 +27,22 @@
     <h1 class="onboarding-title">CRATE RNG</h1>
 
     <form class="onboarding-form" id="formFetchProfile" on:submit={handleSubmit}>
-      <label for="inputProfileUrl" class="input-label">Spotify Profile or Last.fm Username</label>
+      <label for="inputUsername" class="input-label">Last.fm Username</label>
       <div class="input-group">
         <input
           type="text"
-          id="inputProfileUrl"
+          id="inputUsername"
           class="input-profile"
-          placeholder="Spotify profile link or Last.fm username (e.g. rj or lastfm:username)"
+          placeholder="Enter Last.fm username (e.g. rj)"
           autocomplete="off"
           spellcheck="false"
-          bind:value={profileUrl}
+          bind:value={username}
           required
         />
         <button type="submit" class="btn-build-crate" id="btnBuildCrate" disabled={$isBuildingCrate}>
           <span id="btnBuildText">{$isBuildingCrate ? 'Building Crate...' : 'Fetch & Build Crate'}</span>
           <div class="btn-spinner {$isBuildingCrate ? '' : 'hidden'}" id="btnSpinner"></div>
         </button>
-      </div>
-
-      <div class="options-bar">
-        <label class="checkbox-label">
-          <input type="checkbox" id="chkForceRefresh" bind:checked={forceRefresh} />
-          <span>Force live re-scrape (bypass local cache)</span>
-        </label>
       </div>
     </form>
 

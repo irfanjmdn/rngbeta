@@ -236,24 +236,19 @@ async function loadLastfmCrateClient(username) {
   }
 }
 
-export async function fetchAndBuildCrate(profileUrl, forceRefresh = false) {
+export async function fetchAndBuildCrate(inputStr, forceRefresh = false) {
   getAudioContext();
   isBuildingCrate.set(true);
   debugStatus.set('active');
-  appendLog(`Initiating profile request for: ${profileUrl}`, 'system');
 
-  const isLastFm = profileUrl.startsWith('lastfm:') || profileUrl.toLowerCase().includes('last.fm/user/');
-  if (isLastFm) {
-    let lastfmUser = '';
-    if (profileUrl.startsWith('lastfm:')) {
-      lastfmUser = profileUrl.split('lastfm:')[1].trim();
-    } else {
-      const parts = profileUrl.split('last.fm/user/')[1].split('/')[0].split('?')[0].trim();
-      lastfmUser = parts;
-    }
-    await loadLastfmCrateClient(lastfmUser);
-    return;
+  let lastfmUser = (inputStr || '').trim();
+  if (lastfmUser.toLowerCase().includes('last.fm/user/')) {
+    lastfmUser = lastfmUser.split('last.fm/user/')[1].split('/')[0].split('?')[0].trim();
+  } else if (lastfmUser.startsWith('lastfm:')) {
+    lastfmUser = lastfmUser.split('lastfm:')[1].trim();
   }
+
+  appendLog(`Initiating Last.fm request for user: ${lastfmUser}`, 'system');
 
   const isStaticHost = typeof window !== 'undefined' && (
     window.location.hostname.endsWith('github.io') ||
@@ -261,7 +256,7 @@ export async function fetchAndBuildCrate(profileUrl, forceRefresh = false) {
   );
 
   if (isStaticHost) {
-    await loadStaticDemoCrate(profileUrl);
+    await loadLastfmCrateClient(lastfmUser);
     return;
   }
 
