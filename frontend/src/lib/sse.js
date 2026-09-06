@@ -90,15 +90,49 @@ async function loadLastfmCrateClient(username) {
 
   appendLog(`Fetching listening history from Last.fm for '${displayName}'...`, 'info');
   try {
+    const fetchPage = async (pageNum, retries = 2) => {
+      const url = `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${encodeURIComponent(username)}&limit=200&page=${pageNum}&api_key=${apiKey}&format=json`;
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) {
+            if (attempt < retries) {
+              await wait(1200);
+              continue;
+            }
+            throw new Error(`Last.fm returned HTTP ${res.status}`);
+          }
+          const data = await res.json();
+          if (data.error) {
+            if (data.error === 29 && attempt < retries) {
+              await wait(1400);
+              continue;
+            }
+            throw new Error(data.message || `Last.fm API error ${data.error}`);
+          }
+          return data;
+        } catch (err) {
+          if (attempt < retries) {
+            await wait(1200);
+            continue;
+          }
+          throw err;
+        }
+      }
+      return null;
+    };
+
+    const extractTracks = (data) => {
+      if (!data?.recenttracks?.track) return [];
+      const t = data.recenttracks.track;
+      return Array.isArray(t) ? t : [t];
+    };
+
     const rawScrobbles = [];
 
     // 1. Fetch page 1 to inspect total scrobbles and totalPages
-    const p1Res = await fetch(`https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${encodeURIComponent(username)}&limit=200&page=1&api_key=${apiKey}&format=json`);
-    if (!p1Res.ok) {
-      throw new Error(`Last.fm returned HTTP ${p1Res.status}`);
-    }
-    const p1Data = await p1Res.json();
-    const p1Batch = p1Data.recenttracks?.track || [];
+    const p1Data = await fetchPage(1);
+    const p1Batch = extractTracks(p1Data);
     if (!p1Batch.length) {
       throw new Error(`No recent tracks found for Last.fm user '${username}'`);
     }
@@ -127,24 +161,14 @@ async function loadLastfmCrateClient(username) {
 
     if (extraPages.length > 0) {
       appendLog(`Sampling listening timeline across pages: ${extraPages.join(', ')}...`, 'info');
-      // Fetch in pairs with brief pause to respect rate limits
-      for (let i = 0; i < extraPages.length; i += 2) {
-        const slice = extraPages.slice(i, i + 2);
-        const batchResults = await Promise.all(slice.map(async (pageNum) => {
-          try {
-            const res = await fetch(`https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${encodeURIComponent(username)}&limit=200&page=${pageNum}&api_key=${apiKey}&format=json`);
-            if (!res.ok) return [];
-            const data = await res.json();
-            return data.recenttracks?.track || [];
-          } catch (e) {
-            return [];
-          }
-        }));
-        for (const b of batchResults) {
-          rawScrobbles.push(...b);
-        }
-        if (i + 2 < extraPages.length) {
-          await wait(120);
+      for (const pageNum of extraPages) {
+        await wait(260);
+        try {
+          const data = await fetchPage(pageNum, 1);
+          const batch = extractTracks(data);
+          rawScrobbles.push(...batch);
+        } catch (pageErr) {
+          appendLog(`Notice sampling page ${pageNum}: ${pageErr.message}`, 'warning');
         }
       }
     }
