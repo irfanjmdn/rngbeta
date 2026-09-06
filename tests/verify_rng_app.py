@@ -45,9 +45,23 @@ async def run_tests():
         assert len(logs) >= 3, f"Not enough debug log lines: {len(logs)}"
         print(f"CHECK PASSED: Debug dropdown logged {len(logs)} events. Latest: '{logs[-1]}'")
 
+        # Verify Fullscreen Desktop Reminder appears
+        await page.wait_for_selector("#desktopReminderScreen", timeout=10000)
+        assert await page.is_visible("#desktopReminderScreen"), "Desktop reminder screen not visible!"
+        print("CHECK PASSED: Fullscreen desktop reminder displayed before arena.")
+
+        # Capture reminder screen screenshot
+        screenshot_reminder = os.path.join(TEST_DIR, "desktop_reminder_fullscreen.png")
+        await page.screenshot(path=screenshot_reminder)
+
+        # Click Agree button to enter arena
+        btn_agree = await page.wait_for_selector("#btnAgreeNotice")
+        await btn_agree.click()
+        print("Clicked Agree button.")
+
         # Verify Game Arena unlocks
         await page.wait_for_selector("#gameArenaScreen:not(.hidden)", timeout=10000)
-        print("CHECK PASSED: Game Arena unlocked after profile compilation.")
+        print("CHECK PASSED: Game Arena unlocked after profile compilation and agreement.")
 
         # Verify HUD Telemetry
         hud_text = await page.text_content("#hudAccountSub")
@@ -143,7 +157,9 @@ async def run_tests():
 
         # Load profile on mobile
         await mob_page.click("#btnBuildCrate")
-        await mob_page.wait_for_selector("#gameArenaScreen:not(.hidden)", timeout=4000)
+        await mob_page.wait_for_selector("#desktopReminderScreen", timeout=6000)
+        await mob_page.click("#btnAgreeNotice")
+        await mob_page.wait_for_selector("#gameArenaScreen:not(.hidden)", timeout=6000)
 
         # Mobile spin with Auto Skip
         await mob_page.click("#btnAutoSkip")

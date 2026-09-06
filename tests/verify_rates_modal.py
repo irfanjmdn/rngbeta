@@ -9,9 +9,12 @@ def test_rates_modal():
         # Test 1: Desktop View
         page = browser.new_page(viewport={"width": 1280, "height": 800})
         page.goto("http://127.0.0.1:8080")
-        page.wait_for_selector("#btnDemoIrfan", timeout=10000)
         page.click("#btnDemoIrfan")
         
+        # Agree to Desktop Notice
+        page.wait_for_selector("#btnAgreeNotice", timeout=10000)
+        page.click("#btnAgreeNotice")
+
         # Wait for Game Arena
         page.wait_for_selector("#gameArenaScreen:not(.hidden)", timeout=15000)
         page.wait_for_selector("#btnHudRates", timeout=5000)
@@ -54,6 +57,8 @@ def test_rates_modal():
         mobile_page.goto("http://127.0.0.1:8080")
         mobile_page.wait_for_selector("#btnDemoIrfan", timeout=10000)
         mobile_page.click("#btnDemoIrfan")
+        mobile_page.wait_for_selector("#btnAgreeNotice", timeout=10000)
+        mobile_page.click("#btnAgreeNotice")
         mobile_page.wait_for_selector("#gameArenaScreen:not(.hidden)", timeout=15000)
         mobile_page.wait_for_selector("#btnHudRates", timeout=5000)
             

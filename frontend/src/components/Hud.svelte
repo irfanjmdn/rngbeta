@@ -379,7 +379,10 @@
         {/if}
       </div>
       <div class="hud-brand-titles">
-        <div class="hud-brand-title">TRACK CRATE RNG</div>
+        <div class="hud-brand-title">
+          TRACK CRATE RNG
+          <span class="hud-beta-badge">BETA</span>
+        </div>
         <div class="hud-brand-sub" id="hudAccountSub">
           {$activeUserId || 'Username'} / {$rngTracks.length} Tracks / {$playlistsCount} Playlists
         </div>

@@ -26,6 +26,8 @@ async def run_feature_tests():
 
         # Load demo profile
         await page.click("#btnDemoIrfan")
+        await page.wait_for_selector("#btnAgreeNotice", timeout=10000)
+        await page.click("#btnAgreeNotice")
         await page.wait_for_selector("#gameArenaScreen:not(.hidden)", timeout=10000)
         print("PASS: App loaded demo profile.")
 
