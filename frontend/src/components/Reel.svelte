@@ -26,7 +26,7 @@
     playTierLandingSound,
     getAudioContext,
   } from '../lib/audio.js';
-  import { isPlaceholderCover, clientArtCache, fetchTrackDetails } from '../lib/artCache.js';
+  import { isPlaceholderCover, clientArtCache, fetchTrackDetails, fetchTrackPreview } from '../lib/artCache.js';
 
   export let onRollComplete = () => {};
 
@@ -371,6 +371,17 @@
           winner.album_cover_url = details.album_cover_url;
           if (details.release_date) winner.release_date = details.release_date;
           updateWinnerArt(details.album_cover_url);
+        }
+      });
+    }
+
+    // Prefetch 30s audio preview and HD art during the 3.95s spin
+    if (!winner.preview_url) {
+      fetchTrackPreview(winner).then((pUrl) => {
+        if (pUrl) {
+          const preAudio = new Audio();
+          preAudio.preload = 'auto';
+          preAudio.src = pUrl;
         }
       });
     }

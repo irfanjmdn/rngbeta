@@ -28,20 +28,20 @@
     <h1 class="onboarding-title">CRATE RNG</h1>
 
     <form class="onboarding-form" id="formFetchProfile" on:submit={handleSubmit}>
-      <label for="inputProfileUrl" class="input-label">Spotify Profile URL or Username</label>
+      <label for="inputProfileUrl" class="input-label">Spotify Profile or Last.fm Username</label>
       <div class="input-group">
         <input
           type="text"
           id="inputProfileUrl"
           class="input-profile"
-          placeholder="https://open.spotify.com/user/2jp1yf3h1h49zye21bxnxk0w5"
+          placeholder="Spotify profile link or Last.fm username (e.g. rj or lastfm:username)"
           autocomplete="off"
           spellcheck="false"
           bind:value={profileUrl}
           required
         />
         <button type="submit" class="btn-build-crate" id="btnBuildCrate" disabled={$isBuildingCrate}>
-          <span id="btnBuildText">{$isBuildingCrate ? 'Scanning Profile...' : 'Fetch & Build Crate'}</span>
+          <span id="btnBuildText">{$isBuildingCrate ? 'Building Crate...' : 'Fetch & Build Crate'}</span>
           <div class="btn-spinner {$isBuildingCrate ? '' : 'hidden'}" id="btnSpinner"></div>
         </button>
       </div>

@@ -334,6 +334,161 @@ def compute_dynamic_rarity_tracks(playlists_data):
 
     return all_tracks
 
+
+def fetch_lastfm_crate(username, sse_log_fn=None):
+    """Fetch user's top tracks from Last.fm and format them as Crate RNG tracks."""
+    api_key = "b25b959554ed76058ac220b7b2e0a026"
+    headers = {"User-Agent": "CrateRNG/1.0"}
+    
+    if sse_log_fn:
+        sse_log_fn(f"Fetching Last.fm user info for '{username}'...")
+        
+    user_url = f"https://ws.audioscrobbler.com/2.0/?method=user.getinfo&user={urllib.parse.quote(username)}&api_key={api_key}&format=json"
+    user_info = {"displayName": username, "avatarUrl": None, "playcount": 0}
+    try:
+        req = urllib.request.Request(user_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            u_data = json.loads(resp.read().decode())
+            u = u_data.get("user", {})
+            user_info["displayName"] = u.get("name") or username
+            images = u.get("image", [])
+            if images and isinstance(images, list):
+                user_info["avatarUrl"] = images[-1].get("#text") or None
+    except Exception as e:
+        if sse_log_fn:
+            sse_log_fn(f"Notice getting user info: {e}", "warning")
+
+    if sse_log_fn:
+        sse_log_fn(f"Fetching recent listening history from Last.fm for '{username}'...", "info")
+
+    raw_scrobbles = []
+    for page_num in (1, 2, 3):
+        tracks_url = f"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={urllib.parse.quote(username)}&limit=200&page={page_num}&api_key={api_key}&format=json"
+        try:
+            req = urllib.request.Request(tracks_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                t_data = json.loads(resp.read().decode())
+                batch = t_data.get("recenttracks", {}).get("track", [])
+                if not batch:
+                    break
+                raw_scrobbles.extend(batch)
+        except Exception as e:
+            if sse_log_fn:
+                sse_log_fn(f"Notice fetching page {page_num}: {e}", "warning")
+            break
+
+    if not raw_scrobbles:
+        return None, None
+
+    now_ts = int(time.time())
+    track_dict = {}
+    for t in raw_scrobbles:
+        title = t.get("name", "").strip()
+        artist_obj = t.get("artist", {})
+        artist = (artist_obj.get("#text") if isinstance(artist_obj, dict) else str(artist_obj)).strip()
+        if not title or not artist:
+            continue
+        key = (title.lower(), artist.lower())
+
+        is_now_playing = t.get("@attr", {}).get("nowplaying") == "true"
+        date_obj = t.get("date", {})
+        uts = now_ts if is_now_playing else int(date_obj.get("uts", 0))
+        date_text = "Now Playing" if is_now_playing else date_obj.get("#text", "Past listen")
+
+        images = t.get("image", [])
+        cover_url = images[-1].get("#text") if (images and isinstance(images, list)) else ""
+
+        if key not in track_dict:
+            track_dict[key] = {
+                "title": title,
+                "artist": artist,
+                "last_played_uts": uts,
+                "last_played_text": date_text,
+                "cover_url": cover_url,
+                "url": t.get("url", f"https://www.last.fm/user/{username}"),
+                "play_count": 1
+            }
+        else:
+            track_dict[key]["play_count"] += 1
+            if uts > track_dict[key]["last_played_uts"]:
+                track_dict[key]["last_played_uts"] = uts
+                track_dict[key]["last_played_text"] = date_text
+
+    unique_tracks = list(track_dict.values())
+    # Sort ascending: lowest timestamp (oldest last played) = rank 0 = Mythic
+    unique_tracks.sort(key=lambda x: x["last_played_uts"])
+
+    total = len(unique_tracks)
+    if sse_log_fn:
+        sse_log_fn(f"Compiled {total} unique tracks from listening history.", "success")
+        sse_log_fn("Calculating rarity: oldest played = Mythic, newest played = Common...", "info")
+
+    all_tracks = []
+    
+    tier_target_probs = {
+        "mythic": 0.005,
+        "legendary": 0.025,
+        "epic": 0.070,
+        "rare": 0.140,
+        "uncommon": 0.260,
+        "common": 0.500
+    }
+    
+    tier_counts = {"mythic": 0, "legendary": 0, "epic": 0, "rare": 0, "uncommon": 0, "common": 0}
+    temp_specs = []
+    for rank in range(total):
+        pct = (rank + 0.5) / max(1, total)
+        if pct <= 0.012:
+            tier, name, color, odds, t_pct = "mythic", "Mythic", "#F43F5E", 200, pct / 0.012
+        elif pct <= 0.045:
+            tier, name, color, odds, t_pct = "legendary", "Legendary", "#F59E0B", 40, (pct - 0.012) / (0.045 - 0.012)
+        elif pct <= 0.125:
+            tier, name, color, odds, t_pct = "epic", "Epic", "#A855F7", 14, (pct - 0.045) / (0.125 - 0.045)
+        elif pct <= 0.28:
+            tier, name, color, odds, t_pct = "rare", "Rare", "#3B82F6", 7, (pct - 0.125) / (0.28 - 0.125)
+        elif pct <= 0.55:
+            tier, name, color, odds, t_pct = "uncommon", "Uncommon", "#10B981", 4, (pct - 0.28) / (0.55 - 0.28)
+        else:
+            tier, name, color, odds, t_pct = "common", "Common", "#94A3B8", 2, (pct - 0.55) / (1.0 - 0.55)
+        tier_counts[tier] += 1
+        temp_specs.append((tier, name, color, odds, t_pct))
+
+    for i, t in enumerate(unique_tracks):
+        tier, name, color, odds, t_pct = temp_specs[i]
+        
+        count = max(1, tier_counts[tier])
+        target_prob = tier_target_probs[tier]
+        pool_weight = 100000.0 * target_prob
+        fine_mod = 0.85 + (0.30 * (1.0 - t_pct))
+        track_weight = max(1, int(round((pool_weight / count) * fine_mod)))
+        drop_chance_str = f"1 in {odds:,}"
+
+        track_id = f"lastfm:{username}:{i}"
+        all_tracks.append({
+            "id": track_id,
+            "spotify_id": "",
+            "title": t["title"],
+            "artist": t["artist"],
+            "album_cover_url": t["cover_url"],
+            "playlist_cover_url": t["cover_url"],
+            "cover_url": t["cover_url"],
+            "playlist_name": f"Last played: {t['last_played_text']}",
+            "playlist_id": f"lastfm_{username}",
+            "playlist_uri": "",
+            "playlist_url": t["url"],
+            "preview_url": "",
+            "uri": "",
+            "spotify_url": t["url"],
+            "rarityTier": tier,
+            "rarityName": name,
+            "rarityColor": color,
+            "dropChance": drop_chance_str,
+            "weight": track_weight,
+            "release_date": ""
+        })
+
+    return user_info, all_tracks
+
 class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -479,6 +634,7 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
             force_refresh = payload.get("force_refresh", False)
             user_id = extract_user_id(profile_url)
 
+
             # Start SSE Stream
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -497,6 +653,48 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
 
             def log_msg(text, level="info"):
                 send_event({"type": "log", "level": level, "message": text, "time": time.strftime("%H:%M:%S")})
+
+            is_lastfm = profile_url.startswith("lastfm:") or "last.fm/user/" in profile_url.lower()
+            if is_lastfm:
+                if profile_url.startswith("lastfm:"):
+                    lastfm_user = profile_url.split("lastfm:")[1].strip()
+                else:
+                    lastfm_user = profile_url.split("last.fm/user/")[1].split("/")[0].split("?")[0].strip()
+                log_msg(f"Target Last.fm Account: {lastfm_user}", "info")
+                u_info, lf_tracks = fetch_lastfm_crate(lastfm_user, sse_log_fn=lambda m, lvl="info": log_msg(m, lvl))
+                if not lf_tracks:
+                    send_event({"type": "error", "message": f"Could not find tracks for Last.fm user '{lastfm_user}'."})
+                    return
+
+                mythic_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "mythic")
+                legend_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "legendary")
+                epic_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "epic")
+                rare_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "rare")
+                uncommon_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "uncommon")
+                common_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "common")
+
+                log_msg(f"Library compiled: {len(lf_tracks)} unique tracks from Last.fm listening history.", "success")
+                log_msg(f"Rarity Distribution -> Mythic: {mythic_cnt}, Legendary: {legend_cnt}, Epic: {epic_cnt}, Rare: {rare_cnt}, Uncommon: {uncommon_cnt}, Common: {common_cnt}", "info")
+                log_msg("Crate RNG initialized. Ready to roll!", "success")
+
+                send_event({
+                    "type": "ready",
+                    "userId": u_info.get("displayName") or lastfm_user,
+                    "rawUserId": lastfm_user,
+                    "avatarUrl": u_info.get("avatarUrl"),
+                    "playlistsCount": 1,
+                    "tracksCount": len(lf_tracks),
+                    "tracks": lf_tracks,
+                    "distribution": {
+                        "mythic": mythic_cnt,
+                        "legendary": legend_cnt,
+                        "epic": epic_cnt,
+                        "rare": rare_cnt,
+                        "uncommon": uncommon_cnt,
+                        "common": common_cnt
+                    }
+                })
+                return
 
             if not user_id:
                 log_msg("Invalid Spotify profile link or username provided.", "error")

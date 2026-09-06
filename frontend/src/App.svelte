@@ -13,6 +13,7 @@
     arenaAudioTime,
     binderAudioTime,
     activeModal,
+    rngTracks,
   } from './lib/store.js';
 
   import Onboarding from './components/Onboarding.svelte';
@@ -25,6 +26,7 @@
   import SettingsModal from './components/SettingsModal.svelte';
   import CyberGrid from './components/CyberGrid.svelte';
   import { connectMediaElement, setArenaLowpassFilter, fadeInMusic, getAudioContext, playLogoutSquareSound } from './lib/audio.js';
+  import { fetchTrackPreview } from './lib/artCache.js';
 
   let hasAgreedToDesktopNotice = typeof sessionStorage !== 'undefined'
     ? sessionStorage.getItem('desktopNoticeAgreed') === '1'
@@ -215,7 +217,19 @@
   function toggleArenaAudio() {
     let track = $activeArenaTrack || $activeWinnerCard;
     const activeEl = getActiveArenaEl();
-    if (!track?.preview_url || !activeEl) return;
+    if (!activeEl || !track) return;
+
+    if (!track.preview_url) {
+      fetchTrackPreview(track).then((pUrl) => {
+        if (pUrl) {
+          track.preview_url = pUrl;
+          activeArenaTrack.set(track);
+          activeWinnerCard.set(track);
+          playArenaAudio(pUrl, 0, false);
+        }
+      });
+      return;
+    }
 
     if (activeEl.paused) {
       stopBinderAudio();
@@ -247,8 +261,17 @@
   function playBinderTrack(card) {
     stopArenaAudio();
     activeBinderTrack.set(card);
-    if (!binderAudioEl || !card?.preview_url) {
+    if (!binderAudioEl || !card) {
       stopBinderAudio();
+      return;
+    }
+
+    if (!card.preview_url) {
+      fetchTrackPreview(card).then((pUrl) => {
+        if (pUrl && $activeBinderTrack?.id === card.id) {
+          playBinderTrack(card);
+        }
+      });
       return;
     }
 
@@ -359,6 +382,15 @@
         // Different audio or not playing: start winner audio cleanly
         playArenaAudio(winner.preview_url, 0, false);
       }
+    } else {
+      fetchTrackPreview(winner).then((pUrl) => {
+        if (pUrl && ($activeWinnerCard?.id === winner.id || $activeArenaTrack?.id === winner.id)) {
+          winner.preview_url = pUrl;
+          activeArenaTrack.set(winner);
+          activeWinnerCard.set(winner);
+          playArenaAudio(pUrl, 0, false);
+        }
+      });
     }
   }
 
@@ -418,6 +450,14 @@
   // fadeOutMusic at logout leaves the bus at ~-80 dB; fadeInMusic brings it back.
   $: if ($isCrateReady) {
     fadeInMusic(0.15);
+    if ($rngTracks && $rngTracks.length > 0) {
+      const rareTracks = $rngTracks.filter((t) => t.rarityTier === 'mythic' || t.rarityTier === 'legendary').slice(0, 5);
+      rareTracks.forEach((t, idx) => {
+        setTimeout(() => {
+          if (!t.preview_url) fetchTrackPreview(t);
+        }, (idx + 1) * 350);
+      });
+    }
   }
 
   onDestroy(() => {
