@@ -48,6 +48,42 @@
   let winnerUnselectTimer = null;
   let driftRafId = null;
   let currentTranslateX = 0;
+  const preloadedAudioMap = new Map();
+  let upcomingRollQueue = [];
+
+  function preloadCardAudio(card) {
+    if (!card) return;
+    fetchTrackPreview(card).then((pUrl) => {
+      if (pUrl && !preloadedAudioMap.has(pUrl)) {
+        const audio = new Audio();
+        audio.preload = 'auto';
+        audio.src = pUrl;
+        preloadedAudioMap.set(pUrl, audio);
+      }
+    });
+    if (card.spotify_id && isPlaceholderCover(card)) {
+      fetchTrackDetails(card.spotify_id, card.title, card.artist).then((details) => {
+        if (details?.album_cover_url) {
+          card.album_cover_url = details.album_cover_url;
+          if (details.release_date) card.release_date = details.release_date;
+        }
+      });
+    }
+  }
+
+  export function topUpUpcomingRolls() {
+    if (!$rngTracks.length) return;
+    while (upcomingRollQueue.length < 5) {
+      const card = pickWeightedCard();
+      if (!card) break;
+      upcomingRollQueue.push(card);
+      preloadCardAudio(card);
+    }
+  }
+
+  $: if ($rngTracks.length > 0 && upcomingRollQueue.length < 5) {
+    topUpUpcomingRolls();
+  }
 
   function pickWeightedCard() {
     if (!$rngTracks.length) return null;
@@ -357,7 +393,9 @@
       $activeWinnerCard ||
       pickWeightedCard();
 
-    const winner = pickWeightedCard();
+    topUpUpcomingRolls();
+    const winner = upcomingRollQueue.shift() || pickWeightedCard();
+    topUpUpcomingRolls();
     const START_INDEX = 5;
     const WINNER_INDEX = 65;
     const TOTAL_ITEMS = 75;
