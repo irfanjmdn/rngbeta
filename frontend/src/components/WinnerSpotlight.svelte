@@ -539,26 +539,13 @@
 
     <div class="winner-footer-row">
       <div class="winner-meta-tags">
-        {#if $activeWinnerCard}
-          <span class="source-in-prefix">in</span>
-        {/if}
         <a
           class="meta-tag source-tag"
           id="winnerSourceLink"
           href={$activeWinnerCard ? $activeWinnerCard.playlist_uri || $activeWinnerCard.playlist_url || '#' : '#'}
-          title="Open playlist in Spotify app"
+          title="Open track link"
           style={$activeWinnerCard ? 'pointer-events: auto;' : 'pointer-events: none;'}
         >
-          {#if $activeWinnerCard && $activeWinnerCard.playlist_cover_url}
-            <img
-              class="winner-playlist-badge"
-              id="winnerPlaylistBadge"
-              src={$activeWinnerCard.playlist_cover_url}
-              alt="Playlist Cover"
-              title="From playlist"
-              style="display: inline-block;"
-            />
-          {/if}
           <strong class="winner-source" id="winnerSource">
             {$activeWinnerCard ? $activeWinnerCard.playlist_name : '-'}
           </strong>

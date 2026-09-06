@@ -384,7 +384,7 @@
           <span class="hud-beta-badge">BETA</span>
         </div>
         <div class="hud-brand-sub" id="hudAccountSub">
-          {$activeUserId || 'Username'} / {$rngTracks.length} Tracks / {$playlistsCount} Playlists
+          {$activeUserId || 'Username'} / {$rngTracks.length} Tracks
         </div>
       </div>
     </div>

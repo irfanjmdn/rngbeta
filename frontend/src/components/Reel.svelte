@@ -121,7 +121,6 @@
     div.innerHTML = `
       <div class="reel-card-art-wrap">
         <img class="reel-card-art ${isPlaceholder ? 'is-placeholder-art' : ''}" src="${albumCover}" alt="${htmlEscape(card.title)}" loading="lazy" />
-        ${playlistCover ? `<img class="reel-card-playlist-badge" src="${playlistCover}" alt="${htmlEscape(card.playlist_name)}" title="Playlist: ${htmlEscape(card.playlist_name)}" loading="lazy" />` : ''}
       </div>
       <div class="reel-card-title" title="${htmlEscape(card.title)}">${htmlEscape(card.title)}</div>
       <div class="reel-card-artist" title="${htmlEscape(card.artist)}">${htmlEscape(card.artist)}</div>

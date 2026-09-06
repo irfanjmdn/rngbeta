@@ -607,6 +607,13 @@
         const dur = arenaAudioEl.duration || 30;
         arenaAudioTime.set({ current: cur, duration: dur });
 
+        // Continue playing past 30s with lowpass filter engaged if track is longer than 30s
+        if (cur >= 30 && dur > 32 && !isArenaBgLooping && !isTransitioningToLoop) {
+          isArenaBgLooping = true;
+          setArenaLowpassFilter(true, 500, 100, 0.25);
+          rampAudioVolume(arenaAudioEl, 0.25, 600);
+        }
+
         // If Auto-Roll is enabled in "on_track_end" mode, roll next track right as song ends!
         const timeLeft = dur - cur;
         if (timeLeft <= 0.65 && timeLeft > 0.05 && !arenaAudioEl.paused) {
@@ -646,6 +653,13 @@
         const cur = arenaAudioElB.currentTime || 0;
         const dur = arenaAudioElB.duration || 30;
         arenaAudioTime.set({ current: cur, duration: dur });
+
+        // Continue playing past 30s with lowpass filter engaged if track is longer than 30s
+        if (cur >= 30 && dur > 32 && !isArenaBgLooping && !isTransitioningToLoop) {
+          isArenaBgLooping = true;
+          setArenaLowpassFilter(true, 500, 100, 0.25);
+          rampAudioVolume(arenaAudioElB, 0.25, 600);
+        }
 
         // If Auto-Roll is enabled in "on_track_end" mode, roll next track right as song ends!
         const timeLeft = dur - cur;
