@@ -77,25 +77,72 @@ export async function fetchTrackPreview(card) {
     } catch (e) {}
   }
 
+function normalizeText(s) {
+  return (s || '').toLowerCase().replace(/[^\w\s]/g, '').trim();
+}
+
+function matchesArtist(targetArtist, resultArtist) {
+  const t = normalizeText(targetArtist);
+  const r = normalizeText(resultArtist);
+  if (!t || !r) return false;
+  if (t === r || t.includes(r) || r.includes(t)) return true;
+  const tWords = t.split(/\s+/).filter((w) => w.length > 1);
+  const rWords = r.split(/\s+/).filter((w) => w.length > 1);
+  const common = tWords.filter((w) => rWords.includes(w));
+  return common.length >= 1 && (tWords.length === 1 || common.length >= Math.min(tWords.length, rWords.length) * 0.5);
+}
+
+function matchesTitle(targetTitle, resultTitle) {
+  const t = normalizeText(targetTitle);
+  const r = normalizeText(resultTitle);
+  if (!t || !r) return false;
+  if (t === r || t.includes(r) || r.includes(t)) return true;
+  const tNoSpace = t.replace(/\s+/g, '');
+  const rNoSpace = r.replace(/\s+/g, '');
+  if (tNoSpace && rNoSpace && (tNoSpace.includes(rNoSpace) || rNoSpace.includes(tNoSpace))) {
+    return true;
+  }
+  const tWords = t.split(/\s+/).filter((w) => w.length > 2);
+  return tWords.length > 0 && tWords.some((w) => r.includes(w));
+}
+
   // Deduplicate inflight requests for same song
   if (pendingPreviewRequests.has(key)) {
     return pendingPreviewRequests.get(key);
   }
 
-  const cleanTitle = (card.title || '').replace(/\s*-\s*\d{4}\s*Remaster.*/i, '').replace(/\s*\(feat\..*?\)/i, '').trim();
+  const cleanTitle = (card.title || '')
+    .replace(/\s*-\s*\d{4}\s*Remaster.*/i, '')
+    .replace(/\s*\(feat\..*?\)/i, '')
+    .replace(/\s*-\s*slowed.*/i, '')
+    .replace(/\s*-\s*sped up.*/i, '')
+    .replace(/\s*\(slowed.*?\)/i, '')
+    .replace(/\s*\(sped up.*?\)/i, '')
+    .trim();
   const cleanArtist = (card.artist || '').trim();
   const queryTerm = `${cleanArtist} ${cleanTitle}`.trim();
   if (!queryTerm) return null;
 
   const promise = (async () => {
     try {
-      const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(queryTerm)}&entity=song&limit=1`;
+      const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(queryTerm)}&entity=song&limit=5`;
       const res = await fetch(itunesUrl);
       if (res.ok) {
         const data = await res.json();
-        if (data.results && data.results.length > 0) {
-          const item = data.results[0];
-          const pUrl = item.previewUrl || '';
+        const results = data.results || [];
+        
+        let matchedItem = null;
+        for (const item of results) {
+          const artOk = matchesArtist(cleanArtist, item.artistName || '');
+          const trkOk = matchesTitle(cleanTitle, item.trackName || '');
+          if (artOk && trkOk) {
+            matchedItem = item;
+            break;
+          }
+        }
+
+        if (matchedItem) {
+          const pUrl = matchedItem.previewUrl || '';
           if (pUrl) {
             clientPreviewCache[key] = pUrl;
             card.preview_url = pUrl;
@@ -103,11 +150,11 @@ export async function fetchTrackPreview(card) {
               localStorage.setItem(`crate_preview_${key}`, pUrl);
             } catch (e) {}
           }
-          if (item.releaseDate && !card.release_date) {
-            card.release_date = item.releaseDate;
+          if (matchedItem.releaseDate && !card.release_date) {
+            card.release_date = matchedItem.releaseDate;
           }
-          if (item.artworkUrl100 && (!card.album_cover_url || card.album_cover_url.includes('2a96cbd8b46e442fc41c2b86b821562f'))) {
-            const hdArt = item.artworkUrl100.replace('100x100bb', '600x600bb');
+          if (matchedItem.artworkUrl100 && (!card.album_cover_url || card.album_cover_url.includes('2a96cbd8b46e442fc41c2b86b821562f'))) {
+            const hdArt = matchedItem.artworkUrl100.replace('100x100bb', '600x600bb');
             card.album_cover_url = hdArt;
           }
           return pUrl;
