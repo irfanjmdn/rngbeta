@@ -24,17 +24,20 @@ async def run_tests():
 
         print("Navigating to standalone app...")
         await page.goto(BASE_URL)
-        await page.wait_for_load_state("networkidle")
+        try:
+            await page.wait_for_load_state("networkidle", timeout=2000)
+        except Exception:
+            await page.wait_for_load_state("domcontentloaded")
 
         # Check onboarding screen visibility
         onboarding = await page.wait_for_selector("#onboardingScreen")
         assert await onboarding.is_visible(), "Onboarding screen not visible!"
         print("CHECK PASSED: Onboarding screen loaded.")
 
-        # Click Demo Button to load cached profile
-        btn_demo = await page.wait_for_selector("#btnDemoIrfan")
-        await btn_demo.click()
-        print("Clicked Demo Profile button.")
+        # Click Build Crate Button to load profile
+        btn_build = await page.wait_for_selector("#btnBuildCrate")
+        await btn_build.click()
+        print("Clicked Build Crate button.")
 
         # Verify debug terminal receives live progress logs
         await page.wait_for_selector(".terminal-line.success", state="attached", timeout=5000)
@@ -105,6 +108,7 @@ async def run_tests():
         print(f"CHECK PASSED: Winner Spotify button uses app protocol '{spot_href}' without target=_blank.")
 
         # Test 4: Album Card Binder Modal
+        await page.hover(".monolith-base")
         btn_binder = await page.wait_for_selector("#btnHudBinder")
         await btn_binder.click()
         await page.wait_for_selector("#gameBinderModal.open")
@@ -132,10 +136,13 @@ async def run_tests():
         mob_page.on("pageerror", lambda err: console_errors.append(f"[MOB] {err}"))
 
         await mob_page.goto(BASE_URL)
-        await mob_page.wait_for_load_state("networkidle")
+        try:
+            await mob_page.wait_for_load_state("networkidle", timeout=2000)
+        except Exception:
+            await mob_page.wait_for_load_state("domcontentloaded")
 
-        # Load demo on mobile
-        await mob_page.click("#btnDemoIrfan")
+        # Load profile on mobile
+        await mob_page.click("#btnBuildCrate")
         await mob_page.wait_for_selector("#gameArenaScreen:not(.hidden)", timeout=4000)
 
         # Mobile spin with Auto Skip

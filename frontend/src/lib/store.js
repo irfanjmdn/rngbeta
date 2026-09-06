@@ -10,8 +10,15 @@ export const starredTrackIds = writable(new Set());
 export const gameRolls = writable(0);
 
 export const isSpinning = writable(false);
+export const reelVelocity = writable(0);
+export const reelCurrentX = writable(null);
 export const isAutoRolling = writable(false);
 export const isAutoSkip = writable(false);
+export const autoRollMode = writable(
+  typeof localStorage !== 'undefined' && localStorage.getItem('crate_autoroll_mode') === 'on_track_end'
+    ? 'on_track_end'
+    : 'immediate'
+); // 'immediate' | 'on_track_end'
 
 export const activeWinnerCard = writable(null);
 export const activeArenaTrack = writable(null);
@@ -39,19 +46,33 @@ export const masteryPercent = derived([unlockedCount, rngTracks], ([$count, $tra
   return Math.round(($count / $tracks.length) * 100);
 });
 
-export const rarestRolled = derived([gameInventory, rngTracks], ([$inv, $tracks]) => {
+export const userAvatarUrl = writable(null);
+
+export const rarestRolledInfo = derived([gameInventory, rngTracks], ([$inv, $tracks]) => {
   const tierRanks = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5, mythic: 6 };
+  const tierColors = {
+    mythic: '#F43F5E',
+    legendary: '#F59E0B',
+    epic: '#A855F7',
+    rare: '#3B82F6',
+    uncommon: '#10B981',
+    common: '#94A3B8'
+  };
   let highestRank = 0;
   let rarestName = '-';
+  let rarestColor = '#94A3B8';
   Object.keys($inv).forEach((id) => {
     const item = $tracks.find((t) => t.id === id);
     if (item && tierRanks[item.rarityTier] > highestRank) {
       highestRank = tierRanks[item.rarityTier];
       rarestName = item.rarityName;
+      rarestColor = item.rarityColor || tierColors[item.rarityTier] || '#94A3B8';
     }
   });
-  return rarestName;
+  return { name: rarestName, color: rarestColor };
 });
+
+export const rarestRolled = derived(rarestRolledInfo, ($info) => $info.name);
 
 // Load saved data for user
 export function loadUserData(userId) {

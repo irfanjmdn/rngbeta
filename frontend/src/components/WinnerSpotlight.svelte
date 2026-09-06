@@ -1,4 +1,5 @@
 <script>
+  import { onMount, onDestroy } from 'svelte';
   import {
     activeWinnerCard,
     starredTrackIds,
@@ -7,58 +8,49 @@
     isArenaPlaying,
     arenaAudioTime,
     rngTracks,
+    isSpinning,
   } from '../lib/store.js';
   import { isPlaceholderCover, fetchTrackDetails } from '../lib/artCache.js';
+  import { getSubBassEnergy, getTargetBassPeakMetrics } from '../lib/audio.js';
 
   export let onToggleAudio = () => {};
   export let onSeekAudio = (ratio) => {};
+  export let onWinnerArtLoaded = (url) => {};
 
   let scrubTrackEl;
   let isDragging = false;
   let albumCoverLoaded = '';
   let releaseDateLoaded = '';
+  let shimmerActive = false;
+  let lastShimmeredCardId = null;
+  let shimmerTimeout = null;
+  let spotlightEl = null;
+  let auroraWrapEl = null;
+  let bassRafId = null;
+  let smoothedBassEnergy = 0;
 
-  const defaultTierLuck = {
-    mythic: '0.5%',
-    legendary: '2.5%',
-    epic: '7%',
-    rare: '14%',
-    uncommon: '26%',
-    common: '50%',
-  };
+  let tiltRafId = null;
+  let targetTiltX = 0;
+  let targetTiltY = 0;
+  let currentTiltX = 0;
+  let currentTiltY = 0;
+  let targetScale = 1;
+  let currentScale = 1;
+  let rumbleX = 0;
+  let rumbleY = 0;
+  let impactSpike = 0;
+  let targetGlareOpacity = 0;
+  let currentGlareOpacity = 0;
+  let targetOuterX = 50;
+  let targetOuterY = 50;
+  let currentOuterX = 50;
+  let currentOuterY = 50;
+  let targetInnerX = 50;
+  let targetInnerY = 50;
+  let currentInnerX = 50;
+  let currentInnerY = 50;
+  let isHoveringCard = false;
 
-  $: luckPercentage = (() => {
-    if (!$activeWinnerCard) return '';
-    const tier = $activeWinnerCard.rarityTier;
-    if ($rngTracks && $rngTracks.length > 0) {
-      const totalWeight = $rngTracks.reduce((sum, t) => sum + (t.weight || 0), 0);
-      if (totalWeight > 0) {
-        const tierWeight = $rngTracks
-          .filter((t) => t.rarityTier === tier)
-          .reduce((sum, t) => sum + (t.weight || 0), 0);
-        if (tierWeight > 0) {
-          const prob = (tierWeight / totalWeight) * 100;
-          const formatted = prob.toFixed(1);
-          return formatted.endsWith('.0') ? `${Math.round(prob)}%` : `${formatted}%`;
-        }
-      }
-    }
-    if (tier && defaultTierLuck[tier]) {
-      return defaultTierLuck[tier];
-    }
-    if ($activeWinnerCard.dropChance) {
-      const match = $activeWinnerCard.dropChance.match(/1\s+in\s+([\d,]+)/i);
-      if (match) {
-        const n = parseFloat(match[1].replace(/,/g, ''));
-        if (n > 0) {
-          const prob = (1 / n) * 100;
-          const formatted = prob.toFixed(1);
-          return formatted.endsWith('.0') ? `${Math.round(prob)}%` : `${formatted}%`;
-        }
-      }
-    }
-    return '';
-  })();
 
   function formatReleaseDate(raw) {
     if (!raw) return '-';
@@ -85,7 +77,34 @@
   $: ownedCount = $activeWinnerCard ? $gameInventory[$activeWinnerCard.id] || 1 : 0;
   $: isNewUnlock = ownedCount === 1;
 
+  let wasSpinning = false;
+  let impactBoost = 0;
+
+  $: if ($isSpinning && !wasSpinning) {
+    wasSpinning = true;
+    impactBoost = 0;
+  } else if (!$isSpinning && wasSpinning) {
+    wasSpinning = false;
+    // Roll finished: punchy impact pop (boost up, then lerp down)
+    impactBoost = 0.055;
+  }
+
   $: if ($activeWinnerCard) {
+    // Single-fire shimmer on entire container for brand-new legendary or mythic cards
+    const tier = $activeWinnerCard.rarityTier;
+    const isRareTier = tier === 'legendary' || tier === 'mythic';
+    if (isNewUnlock && isRareTier && lastShimmeredCardId !== $activeWinnerCard.id) {
+      lastShimmeredCardId = $activeWinnerCard.id;
+      shimmerActive = true;
+      if (shimmerTimeout) clearTimeout(shimmerTimeout);
+      shimmerTimeout = setTimeout(() => {
+        shimmerActive = false;
+        shimmerTimeout = null;
+      }, 1300);
+    } else if (lastShimmeredCardId !== $activeWinnerCard.id) {
+      shimmerActive = false;
+    }
+
     albumCoverLoaded =
       $activeWinnerCard.album_cover_url ||
       $activeWinnerCard.cover_url ||
@@ -103,6 +122,7 @@
           if (details.album_cover_url) {
             albumCoverLoaded = details.album_cover_url;
             if ($activeWinnerCard) $activeWinnerCard.album_cover_url = details.album_cover_url;
+            onWinnerArtLoaded(details.album_cover_url);
           }
           if (details.release_date) {
             releaseDateLoaded = details.release_date;
@@ -177,12 +197,165 @@
       window.location.href = uri;
     }
   }
+
+  function tickSubBass() {
+    if ($isArenaPlaying) {
+      const metrics = getTargetBassPeakMetrics(20, 150);
+      const rawEnergy = metrics.energy;
+
+      // Snappy attack and smooth release for punchy tactile breathing swell
+      if (rawEnergy > smoothedBassEnergy) {
+        smoothedBassEnergy += (rawEnergy - smoothedBassEnergy) * 0.48;
+      } else {
+        smoothedBassEnergy += (rawEnergy - smoothedBassEnergy) * 0.09;
+      }
+
+      // Transient impact spike driven by beat detection
+      if (metrics.peak > impactSpike) {
+        impactSpike = metrics.peak;
+      } else {
+        impactSpike *= 0.86;
+      }
+    } else {
+      smoothedBassEnergy *= 0.85;
+      impactSpike *= 0.85;
+    }
+
+    if (smoothedBassEnergy < 0.001) smoothedBassEnergy = 0;
+    if (impactSpike < 0.001) impactSpike = 0;
+
+    if (auroraWrapEl) {
+      const surgeEnergy = Math.max(smoothedBassEnergy, impactSpike * 0.85);
+      const flowX = surgeEnergy * 42;
+      auroraWrapEl.style.setProperty('--aurora-flow-x', `${flowX.toFixed(1)}px`);
+    }
+
+    bassRafId = requestAnimationFrame(tickSubBass);
+  }
+
+  function handleGlobalPointerMove(e) {
+    if (!spotlightEl) return;
+    const rect = spotlightEl.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    // Calculate center coordinates of winner card
+    const cardCenterX = rect.left + rect.width / 2;
+    const cardCenterY = rect.top + rect.height / 2;
+
+    // Distance normalized across viewport width/height
+    const viewW = window.innerWidth || document.documentElement.clientWidth || 1920;
+    const viewH = window.innerHeight || document.documentElement.clientHeight || 1080;
+
+    const deltaX = (e.clientX - cardCenterX) / (viewW * 0.5);
+    const deltaY = (e.clientY - cardCenterY) / (viewH * 0.5);
+
+    // Smooth tilt angles clamped to -9deg to +9deg
+    targetTiltX = Math.max(-9, Math.min(9, -deltaY * 9));
+    targetTiltY = Math.max(-9, Math.min(9, deltaX * 9));
+
+    // Inverted & reversed lighting reflection:
+    // Physical specular reflection moves opposite to surface normal deviation relative to overhead light
+    targetOuterX = 50 - (targetTiltY * 4.2);
+    targetOuterY = 40 + (targetTiltX * 4.2);
+
+    // Inner substrate glass reflection: reverse offset for depth parallax
+    targetInnerX = targetOuterX - (targetTiltY * 2.2);
+    targetInnerY = targetOuterY + (targetTiltX * 2.2);
+
+    // Subtle specular glare intensity based on card tilt angle towards the light source
+    const tiltMagnitude = Math.hypot(targetTiltX, targetTiltY);
+    targetGlareOpacity = 0.22 + Math.min(0.28, (tiltMagnitude / 12.0) * 0.28);
+  }
+
+  function tickTilt() {
+    // High-fidelity spring/lerp damping (alpha = 0.10)
+    const factor = 0.10;
+    currentTiltX += (targetTiltX - currentTiltX) * factor;
+    currentTiltY += (targetTiltY - currentTiltY) * factor;
+    currentGlareOpacity += (targetGlareOpacity - currentGlareOpacity) * factor;
+    currentOuterX += (targetOuterX - currentOuterX) * factor;
+    currentOuterY += (targetOuterY - currentOuterY) * factor;
+    currentInnerX += (targetInnerX - currentInnerX) * factor;
+    currentInnerY += (targetInnerY - currentInnerY) * factor;
+
+    // Scale calculation:
+    // When rolling ($isSpinning), shrink smoothly to 0.92 while keeping 3D tilt.
+    // When roll lands, impactBoost kicks up by +0.055 and decays smoothly back to 0.
+    const baseTargetScale = $isSpinning ? 0.92 : 1.0;
+    impactBoost += (0 - impactBoost) * 0.12;
+    // Audio reactivity: punchy tactile scale kick from peak impact + responsive rhythmic swell from sub-bass
+    const audioPunch = (smoothedBassEnergy * 0.052) + (impactSpike * 0.040);
+    const audioReactiveCardScale = (baseTargetScale + impactBoost) + audioPunch;
+    currentScale += (audioReactiveCardScale - currentScale) * 0.35;
+
+    // Tactile rumble kick on energetic sub-bass impacts
+    if ($isArenaPlaying && impactSpike > 0.30) {
+      const rumbleAmp = impactSpike * 0.95;
+      const angle = Math.random() * Math.PI * 2;
+      const targetRumbleX = Math.cos(angle) * rumbleAmp;
+      const targetRumbleY = Math.sin(angle) * rumbleAmp;
+      rumbleX += (targetRumbleX - rumbleX) * 0.65;
+      rumbleY += (targetRumbleY - rumbleY) * 0.65;
+    } else {
+      rumbleX += (0 - rumbleX) * 0.35;
+      rumbleY += (0 - rumbleY) * 0.35;
+    }
+
+    if (spotlightEl) {
+      spotlightEl.style.setProperty('--rumble-x', `${rumbleX.toFixed(2)}px`);
+      spotlightEl.style.setProperty('--rumble-y', `${rumbleY.toFixed(2)}px`);
+      spotlightEl.style.setProperty('--tilt-rx', `${currentTiltX.toFixed(2)}deg`);
+      spotlightEl.style.setProperty('--tilt-ry', `${currentTiltY.toFixed(2)}deg`);
+      spotlightEl.style.setProperty('--tilt-scale', currentScale.toFixed(4));
+      spotlightEl.style.setProperty('--glare-opacity', currentGlareOpacity.toFixed(3));
+      spotlightEl.style.setProperty('--glare-outer-x', `${currentOuterX.toFixed(1)}%`);
+      spotlightEl.style.setProperty('--glare-outer-y', `${currentOuterY.toFixed(1)}%`);
+      spotlightEl.style.setProperty('--glare-inner-x', `${currentInnerX.toFixed(1)}%`);
+      spotlightEl.style.setProperty('--glare-inner-y', `${currentInnerY.toFixed(1)}%`);
+      spotlightEl.style.setProperty('--bass-energy', Math.max(smoothedBassEnergy, impactSpike * 0.85).toFixed(3));
+    }
+
+    tiltRafId = requestAnimationFrame(tickTilt);
+  }
+
+  onMount(() => {
+    bassRafId = requestAnimationFrame(tickSubBass);
+    tiltRafId = requestAnimationFrame(tickTilt);
+    window.addEventListener('pointermove', handleGlobalPointerMove, { passive: true });
+  });
+
+  onDestroy(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pointermove', handleGlobalPointerMove);
+    }
+    if (bassRafId) {
+      cancelAnimationFrame(bassRafId);
+      bassRafId = null;
+    }
+    if (tiltRafId) {
+      cancelAnimationFrame(tiltRafId);
+      tiltRafId = null;
+    }
+  });
 </script>
 
-<section
-  class="winner-spotlight-box tier-{$activeWinnerCard?.rarityTier || 'common'} {$activeWinnerCard ? 'pop' : ''}"
-  id="winnerSpotlight"
->
+<div class="winner-spotlight-wrapper">
+  <section
+    class="winner-spotlight-box tier-{$activeWinnerCard?.rarityTier || 'common'} {$activeWinnerCard ? 'pop' : ''} {$activeWinnerCard && isNewUnlock ? 'is-holographic-new' : ''} {$isSpinning ? 'is-rolling' : ''}"
+    id="winnerSpotlight"
+    aria-label="Winner track spotlight"
+    style="--tier-color: {$activeWinnerCard?.rarityColor || '#10B981'};"
+    bind:this={spotlightEl}
+  >
+  {#if shimmerActive}
+    <div class="winner-shimmer-sweep" aria-hidden="true"></div>
+  {/if}
+  <div class="winner-tilt-glare" aria-hidden="true">
+    <div class="winner-tilt-glare-outer"></div>
+    <div class="winner-tilt-glare-inner"></div>
+    <div class="winner-tilt-glare-grain"></div>
+  </div>
+
   <div class="winner-art-column" id="winnerArtColumn">
     <div
       class="winner-art-wrap"
@@ -236,33 +409,43 @@
     </div>
   </div>
 
-  <div class="winner-info">
-    <div class="winner-header-row">
-      {#if $activeWinnerCard}
-        <div class="winner-header-badges">
-          {#if luckPercentage}
-            <span
-              class="winner-odds-pill winner-chance-pill"
-              id="winnerOddsStamp"
-              style="--tier-color: {$activeWinnerCard.rarityColor};"
-            >
-              <span class="odds-val chance-val">{luckPercentage}</span>
-              <span class="odds-label chance-label">CHANCE</span>
-            </span>
-          {/if}
-          {#if !isNewUnlock}
-            <span
-              id="winnerCountBadge"
-              class="winner-foil-stamp is-duplicate"
-              style="--tier-color: {$activeWinnerCard.rarityColor};"
-            >
-              <span class="stamp-text">DUPLICATE</span>
-            </span>
-          {/if}
+  <div class="winner-info {$activeWinnerCard && isNewUnlock ? 'is-new-unlock' : ''}">
+    {#if $activeWinnerCard && isNewUnlock}
+      <div class="ps5-mesh-aurora-wrap" bind:this={auroraWrapEl} aria-hidden="true">
+        <div class="mesh-blobs-layer">
+          <div class="mesh-blob mesh-blob-1" style="--tier-color: {$activeWinnerCard.rarityColor};"></div>
+          <div class="mesh-blob mesh-blob-2" style="--tier-color: {$activeWinnerCard.rarityColor};"></div>
+          <div class="mesh-blob mesh-blob-3" style="--tier-color: {$activeWinnerCard.rarityColor};"></div>
+          <div class="mesh-blob mesh-blob-4" style="--tier-color: {$activeWinnerCard.rarityColor};"></div>
         </div>
-      {:else}
-        <span id="winnerCountBadge" class="winner-count-highlight" style="display: none;"></span>
-      {/if}
+        <div class="mesh-gradient-blur-stack">
+          <div class="blur-slice blur-slice-1"></div>
+          <div class="blur-slice blur-slice-2"></div>
+          <div class="blur-slice blur-slice-3"></div>
+          <div class="blur-slice blur-slice-4"></div>
+        </div>
+        <div class="mesh-backdrop-diffuse"></div>
+        <div class="mesh-glass-specular"></div>
+      </div>
+    {/if}
+
+    <div class="winner-title-row">
+      <div class="winner-title-group">
+        <div class="winner-title" id="winnerTitle">
+          {$activeWinnerCard ? $activeWinnerCard.title : 'Press ROLL to Spin Albums'}
+        </div>
+        {#if $activeWinnerCard && !isNewUnlock}
+          <span
+            id="winnerCountBadge"
+            class="winner-foil-stamp is-duplicate"
+            style="--tier-color: {$activeWinnerCard.rarityColor};"
+          >
+            <span class="stamp-text">DUPLICATE</span>
+          </span>
+        {:else}
+          <span id="winnerCountBadge" class="winner-count-highlight" style="display: none;"></span>
+        {/if}
+      </div>
       {#if $activeWinnerCard}
         <button
           class="btn-star-track {isStarred ? 'is-starred' : ''}"
@@ -274,8 +457,8 @@
         >
           <svg
             class="star-icon"
-            width="15"
-            height="15"
+            width="14"
+            height="14"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -289,12 +472,8 @@
         </button>
       {/if}
     </div>
-
-    <div class="winner-title" id="winnerTitle">
-      {$activeWinnerCard ? $activeWinnerCard.title : 'Press ROLL to Spin Albums'}
-    </div>
-    <div class="winner-artist" id="winnerArtist">
-      <span class="artist-name">{$activeWinnerCard ? $activeWinnerCard.artist : 'Watch multiple album covers spin past in real-time'}</span>
+    <div class="winner-artist" id="winnerArtist" style={!$activeWinnerCard ? 'display: none;' : ''}>
+      <span class="artist-name">{$activeWinnerCard ? $activeWinnerCard.artist : ''}</span>
       {#if $activeWinnerCard && formattedReleaseDate && formattedReleaseDate !== '-'}
         <span class="winner-artist-separator" aria-hidden="true">•</span>
         <span class="winner-release-date-wrap">
@@ -405,3 +584,4 @@
     </div>
   </div>
 </section>
+</div>

@@ -153,12 +153,24 @@
     <div class="binder-modal-header">
       <div class="binder-title-wrap">
         <h2 class="binder-title">ALBUM CARD BINDER</h2>
-        <span class="binder-progress-chip" id="binderProgressText">
-          {$unlockedCount} / {$rngTracks.length} Unlocked ({Math.round(($unlockedCount / ($rngTracks.length || 1)) * 100)}%)
-        </span>
+        <div class="binder-progress-block" id="binderProgressText">
+          <div class="binder-progress-stats">
+            <span class="binder-progress-count">{$unlockedCount}</span>
+            <span class="binder-progress-sep">/</span>
+            <span class="binder-progress-total">{$rngTracks.length}</span>
+            <span class="binder-progress-label">UNLOCKED</span>
+            <span class="binder-progress-pct">{Math.round(($unlockedCount / ($rngTracks.length || 1)) * 100)}%</span>
+          </div>
+          <div class="binder-progress-bar" aria-hidden="true">
+            <div
+              class="binder-progress-bar-fill"
+              style="transform: scaleX({Math.min(1, ($unlockedCount / ($rngTracks.length || 1)))}); width: 100%; transform-origin: left center;"
+            ></div>
+          </div>
+        </div>
       </div>
-      <button class="btn-hud-tab" id="btnCloseBinderModal" type="button" on:click={closeModal}>
-        Back to Arena
+      <button class="binder-close" id="btnCloseBinderModal" type="button" on:click={closeModal} aria-label="Close binder">
+        <span class="binder-close-glyph" aria-hidden="true">×</span>
       </button>
     </div>
 
@@ -169,7 +181,7 @@
         type="button"
         on:click={() => (currentFilter = 'all')}
       >
-        All Cards ({tierCounts.all})
+        All Cards <span class="cat-chip-count">({tierCounts.all})</span>
       </button>
       <button
         class="cat-chip {currentFilter === 'starred' ? 'active' : ''} {tierCounts.starred === 0 ? 'empty-tier' : ''}"
@@ -177,7 +189,7 @@
         type="button"
         on:click={() => (currentFilter = 'starred')}
       >
-        ★ Starred (<span id="binderCatStarredCount">{tierCounts.starred}</span>)
+        ★ Starred <span class="cat-chip-count" id="binderCatStarredCount">({tierCounts.starred})</span>
       </button>
       <button
         class="cat-chip {currentFilter === 'mythic' ? 'active' : ''} {tierCounts.mythic === 0 ? 'empty-tier' : ''}"
@@ -185,7 +197,7 @@
         type="button"
         on:click={() => (currentFilter = 'mythic')}
       >
-        Mythic (0.5%) ({tierCounts.mythic})
+        Mythic <span class="cat-chip-count">({tierCounts.mythic})</span>
       </button>
       <button
         class="cat-chip {currentFilter === 'legendary' ? 'active' : ''} {tierCounts.legendary === 0 ? 'empty-tier' : ''}"
@@ -193,7 +205,7 @@
         type="button"
         on:click={() => (currentFilter = 'legendary')}
       >
-        Legendary (2.5%) ({tierCounts.legendary})
+        Legendary <span class="cat-chip-count">({tierCounts.legendary})</span>
       </button>
       <button
         class="cat-chip {currentFilter === 'epic' ? 'active' : ''} {tierCounts.epic === 0 ? 'empty-tier' : ''}"
@@ -201,7 +213,7 @@
         type="button"
         on:click={() => (currentFilter = 'epic')}
       >
-        Epic (7.0%) ({tierCounts.epic})
+        Epic <span class="cat-chip-count">({tierCounts.epic})</span>
       </button>
       <button
         class="cat-chip {currentFilter === 'rare' ? 'active' : ''} {tierCounts.rare === 0 ? 'empty-tier' : ''}"
@@ -209,7 +221,7 @@
         type="button"
         on:click={() => (currentFilter = 'rare')}
       >
-        Rare (14.0%) ({tierCounts.rare})
+        Rare <span class="cat-chip-count">({tierCounts.rare})</span>
       </button>
       <button
         class="cat-chip {currentFilter === 'uncommon' ? 'active' : ''} {tierCounts.uncommon === 0 ? 'empty-tier' : ''}"
@@ -217,7 +229,7 @@
         type="button"
         on:click={() => (currentFilter = 'uncommon')}
       >
-        Uncommon (26.0%) ({tierCounts.uncommon})
+        Uncommon <span class="cat-chip-count">({tierCounts.uncommon})</span>
       </button>
       <button
         class="cat-chip {currentFilter === 'common' ? 'active' : ''} {tierCounts.common === 0 ? 'empty-tier' : ''}"
@@ -225,7 +237,7 @@
         type="button"
         on:click={() => (currentFilter = 'common')}
       >
-        Common (50.0%) ({tierCounts.common})
+        Common <span class="cat-chip-count">({tierCounts.common})</span>
       </button>
     </nav>
 

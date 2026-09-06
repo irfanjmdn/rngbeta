@@ -96,7 +96,7 @@
 
     <div class="rates-list" id="ratesList">
       {#each ratesData as row}
-        <div class="rates-row">
+        <div class="rates-row" style="border-left: 3px solid {row.color};">
           <span
             class="tier-label-badge"
             style="background: {row.bg}; color: {row.color}; border: 1px solid {row.color};"

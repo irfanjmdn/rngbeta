@@ -3,12 +3,15 @@
   import {
     getSfxVolume,
     setSfxVolume,
+    getMusicVolume,
+    setMusicVolume,
     playSampledSound,
     playMechanicalBrakeSound,
     playStarSound,
   } from '../lib/audio.js';
 
   let currentPercent = Math.round(getSfxVolume() * 100);
+  let musicPercent = Math.round(getMusicVolume() * 100);
 
   function closeModal() {
     activeModal.set(null);
@@ -24,6 +27,12 @@
     const val = parseInt(e.target.value, 10);
     currentPercent = isNaN(val) ? 80 : Math.max(0, Math.min(100, val));
     setSfxVolume(currentPercent / 100);
+  }
+
+  function handleMusicSliderInput(e) {
+    const val = parseInt(e.target.value, 10);
+    musicPercent = isNaN(val) ? 80 : Math.max(0, Math.min(100, val));
+    setMusicVolume(musicPercent / 100);
   }
 
   function testSfx() {
@@ -72,6 +81,31 @@
     </div>
 
     <div class="settings-body">
+      <!-- Music Volume Section -->
+      <div class="settings-section">
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="settings-label">Music Volume</div>
+            <div class="settings-sublabel">Spotify previews, arena music playback, and binder audio</div>
+          </div>
+          <span class="settings-val-badge" id="musicVolumeBadge">{musicPercent}%</span>
+        </div>
+        <div class="settings-slider-wrap">
+          <input
+            type="range"
+            class="settings-slider"
+            id="musicVolumeSlider"
+            min="0"
+            max="100"
+            step="1"
+            value={musicPercent}
+            aria-label="Music volume"
+            on:input={handleMusicSliderInput}
+          />
+        </div>
+      </div>
+
+      <!-- Sound Effects Volume Section -->
       <div class="settings-section">
         <div class="settings-row">
           <div class="settings-info">

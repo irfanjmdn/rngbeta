@@ -3,6 +3,8 @@
   import {
     isCrateReady,
     isSpinning,
+    isAutoRolling,
+    autoRollMode,
     activeWinnerCard,
     activeArenaTrack,
     activeBinderTrack,
@@ -21,339 +23,225 @@
   import BinderModal from './components/BinderModal.svelte';
   import RatesModal from './components/RatesModal.svelte';
   import SettingsModal from './components/SettingsModal.svelte';
+  import CyberGrid from './components/CyberGrid.svelte';
+  import { connectMediaElement, setArenaLowpassFilter, fadeInMusic, getAudioContext } from './lib/audio.js';
 
   let reelComponent;
   let arenaAudioEl;
+  let arenaAudioElB;
+  let activeArenaPlayerId = 'A'; // 'A' | 'B'
   let binderAudioEl;
-  let visualizerCanvas;
-  let canvasCtx = null;
   let arenaFadeInterval = null;
+  let arenaFadeIntervalB = null;
   let binderFadeInterval = null;
 
-  let rafId = null;
-  let rings = [];
-  let embers = [];
-
-  const TIER_VISUALIZER_CONFIG = {
-    default: {
-      color: [29, 185, 84],
-      maxRadius: 360,
-      ringSpeed: 7.0,
-      lineWidth: 8,
-      blur: 16,
-      initialOpacity: 0.58,
-      emberCount: 0,
-    },
-    common: {
-      color: [148, 163, 184],
-      maxRadius: 210,
-      ringSpeed: 5.8,
-      lineWidth: 5,
-      blur: 14,
-      initialOpacity: 0.38,
-      emberCount: 0,
-    },
-    uncommon: {
-      color: [16, 185, 129],
-      maxRadius: 320,
-      ringSpeed: 6.8,
-      lineWidth: 7,
-      blur: 16,
-      initialOpacity: 0.52,
-      emberCount: 0,
-    },
-    rare: {
-      color: [59, 130, 246],
-      maxRadius: 460,
-      ringSpeed: 8.5,
-      lineWidth: 10,
-      blur: 18,
-      initialOpacity: 0.70,
-      emberCount: 3,
-    },
-    epic: {
-      color: [168, 85, 247],
-      maxRadius: 620,
-      ringSpeed: 10.5,
-      lineWidth: 14,
-      blur: 21,
-      initialOpacity: 0.85,
-      emberCount: 6,
-    },
-    legendary: {
-      color: [245, 158, 11],
-      maxRadius: 780,
-      ringSpeed: 13.0,
-      lineWidth: 18,
-      blur: 24,
-      initialOpacity: 0.95,
-      emberCount: 10,
-    },
-    mythic: {
-      color: [244, 63, 94],
-      maxRadius: 980,
-      ringSpeed: 16.0,
-      lineWidth: 22,
-      blur: 28,
-      initialOpacity: 1.0,
-      emberCount: 15,
-    },
-  };
-
-  function spawnShockwave(intensity = 1.0) {
-    const tier = $activeWinnerCard?.rarityTier || 'default';
-    const cfg = TIER_VISUALIZER_CONFIG[tier] || TIER_VISUALIZER_CONFIG.default;
-
-    // Enforce strictly one single ring at a time
-    rings = [{
-      radius: 14,
-      maxRadius: cfg.maxRadius * intensity,
-      speed: cfg.ringSpeed * (0.9 + intensity * 0.1),
-      initialOpacity: Math.min(1.0, cfg.initialOpacity * intensity),
-      opacity: Math.min(1.0, cfg.initialOpacity * intensity),
-      lineWidth: cfg.lineWidth,
-      blur: cfg.blur,
-      color: cfg.color,
-    }];
-
-    if (cfg.emberCount > 0) {
-      embers = [];
-      const count = Math.round(cfg.emberCount * intensity);
-      for (let i = 0; i < count; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = (3.0 + Math.random() * 5.0) * (0.85 + intensity * 0.15);
-        embers.push({
-          x: 0,
-          y: 0,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          radius: 1.5 + Math.random() * 2,
-          opacity: 0.9,
-          decay: 0.028 + Math.random() * 0.02,
-          color: cfg.color,
-        });
-      }
+  function rampAudioVolume(audioEl, targetVol, durationMs = 350, onDone = null) {
+    if (!audioEl) return null;
+    const startVol = audioEl.volume;
+    if (Math.abs(startVol - targetVol) < 0.01) {
+      audioEl.volume = targetVol;
+      if (onDone) onDone();
+      return null;
     }
+    const startTime = performance.now();
+    const timer = setInterval(() => {
+      const elapsed = performance.now() - startTime;
+      const progress = Math.min(1, elapsed / durationMs);
+      try {
+        audioEl.volume = startVol + (targetVol - startVol) * progress;
+      } catch (e) {}
+      if (progress >= 1) {
+        clearInterval(timer);
+        try {
+          audioEl.volume = targetVol;
+        } catch (e) {}
+        if (onDone) onDone();
+      }
+    }, 20);
+    return timer;
   }
 
-  function renderVisualizerFrame() {
-    if (!visualizerCanvas) return;
-    if (!canvasCtx) {
-      canvasCtx = visualizerCanvas.getContext('2d');
-    }
-    const ctx = canvasCtx;
-    if (!ctx) return;
-
-    const width = visualizerCanvas.clientWidth;
-    const height = visualizerCanvas.clientHeight;
-    if (visualizerCanvas.width !== width || visualizerCanvas.height !== height) {
-      visualizerCanvas.width = width;
-      visualizerCanvas.height = height;
-    }
-
-    ctx.clearRect(0, 0, width, height);
-
-    const centerX = width / 2;
-    const centerY = height * 0.27;
-
-    for (let i = rings.length - 1; i >= 0; i--) {
-      const r = rings[i];
-      r.radius += r.speed;
-      const progress = Math.min(1.0, r.radius / r.maxRadius);
-      r.opacity = r.initialOpacity * Math.pow(1 - progress, 1.35);
-
-      if (progress >= 1.0 || r.opacity < 0.01) {
-        rings.splice(i, 1);
-        continue;
-      }
-
-      ctx.save();
-      ctx.filter = `blur(${r.blur}px)`;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, r.radius, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(${r.color[0]}, ${r.color[1]}, ${r.color[2]}, ${r.opacity.toFixed(3)})`;
-      ctx.lineWidth = r.lineWidth;
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    for (let i = embers.length - 1; i >= 0; i--) {
-      const e = embers[i];
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(centerX + e.x, centerY + e.y, e.radius, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(${e.color[0]}, ${e.color[1]}, ${e.color[2]}, ${e.opacity.toFixed(3)})`;
-      ctx.shadowColor = `rgba(${e.color[0]}, ${e.color[1]}, ${e.color[2]}, 0.8)`;
-      ctx.shadowBlur = 8;
-      ctx.fill();
-      ctx.restore();
-
-      e.x += e.vx;
-      e.y += e.vy;
-      e.vx *= 0.95;
-      e.vy *= 0.95;
-      e.opacity -= e.decay;
-
-      if (e.opacity <= 0) {
-        embers.splice(i, 1);
-      }
-    }
-
-    if (rings.length > 0 || embers.length > 0) {
-      rafId = requestAnimationFrame(renderVisualizerFrame);
-    } else {
-      rafId = null;
-      ctx.clearRect(0, 0, width, height);
-    }
+  function getActiveArenaEl() {
+    return activeArenaPlayerId === 'A' ? arenaAudioEl : arenaAudioElB;
   }
 
-  function ensureVisualizerLoop() {
-    if (!rafId && typeof window !== 'undefined') {
-      rafId = requestAnimationFrame(renderVisualizerFrame);
-    }
+  function getInactiveArenaEl() {
+    return activeArenaPlayerId === 'A' ? arenaAudioElB : arenaAudioEl;
   }
 
-  function stopOrFadeOutArenaAudio(durationMs = 750) {
+  function stopArenaAudio() {
     if (arenaFadeInterval) {
       clearInterval(arenaFadeInterval);
       arenaFadeInterval = null;
     }
-    if (!arenaAudioEl) return;
-
-    if (durationMs <= 0 || arenaAudioEl.paused || arenaAudioEl.ended || arenaAudioEl.currentTime === 0) {
-      try {
-        arenaAudioEl.pause();
-        arenaAudioEl.currentTime = 0;
-        arenaAudioEl.volume = 1;
-      } catch (e) {}
-      isArenaPlaying.set(false);
-      arenaAudioTime.set({ current: 0, duration: arenaAudioEl.duration || 30 });
-      return;
+    if (arenaFadeIntervalB) {
+      clearInterval(arenaFadeIntervalB);
+      arenaFadeIntervalB = null;
     }
+    isArenaBgLooping = false;
+    isTransitioningToLoop = false;
+    setArenaLowpassFilter(false);
 
-    const startVolume = arenaAudioEl.volume || 1;
-    const startTime = performance.now();
-
-    arenaFadeInterval = setInterval(() => {
-      const elapsed = performance.now() - startTime;
-      const progress = Math.min(elapsed / durationMs, 1);
-      const currentVol = Math.max(0, startVolume * (1 - progress));
-
-      try {
-        arenaAudioEl.volume = currentVol;
-      } catch (e) {}
-
-      if (progress >= 1) {
-        clearInterval(arenaFadeInterval);
-        arenaFadeInterval = null;
+    [arenaAudioEl, arenaAudioElB].forEach((el) => {
+      if (el) {
         try {
-          arenaAudioEl.pause();
-          arenaAudioEl.currentTime = 0;
-          arenaAudioEl.volume = 1;
+          el.pause();
+          el.currentTime = 0;
+          el.volume = 1;
         } catch (e) {}
-        isArenaPlaying.set(false);
-        arenaAudioTime.set({ current: 0, duration: arenaAudioEl.duration || 30 });
       }
-    }, 25);
+    });
+
+    isArenaPlaying.set(false);
+    const activeEl = getActiveArenaEl();
+    arenaAudioTime.set({ current: 0, duration: activeEl?.duration || 30 });
   }
 
-  function stopOrFadeOutBinderAudio(durationMs = 500) {
+  function stopBinderAudio() {
     if (binderFadeInterval) {
       clearInterval(binderFadeInterval);
       binderFadeInterval = null;
     }
     if (!binderAudioEl) return;
-
-    if (durationMs <= 0 || binderAudioEl.paused || binderAudioEl.ended || binderAudioEl.currentTime === 0) {
-      try {
-        binderAudioEl.pause();
-        binderAudioEl.currentTime = 0;
-        binderAudioEl.volume = 1;
-      } catch (e) {}
-      isBinderPlaying.set(false);
-      binderAudioTime.set({ current: 0, duration: binderAudioEl.duration || 30 });
-      return;
-    }
-
-    const startVolume = binderAudioEl.volume || 1;
-    const startTime = performance.now();
-
-    binderFadeInterval = setInterval(() => {
-      const elapsed = performance.now() - startTime;
-      const progress = Math.min(elapsed / durationMs, 1);
-      const currentVol = Math.max(0, startVolume * (1 - progress));
-
-      try {
-        binderAudioEl.volume = currentVol;
-      } catch (e) {}
-
-      if (progress >= 1) {
-        clearInterval(binderFadeInterval);
-        binderFadeInterval = null;
-        try {
-          binderAudioEl.pause();
-          binderAudioEl.currentTime = 0;
-          binderAudioEl.volume = 1;
-        } catch (e) {}
-        isBinderPlaying.set(false);
-        binderAudioTime.set({ current: 0, duration: binderAudioEl.duration || 30 });
-      }
-    }, 25);
+    try {
+      binderAudioEl.pause();
+      binderAudioEl.currentTime = 0;
+      binderAudioEl.volume = 1;
+    } catch (e) {}
+    isBinderPlaying.set(false);
+    binderAudioTime.set({ current: 0, duration: binderAudioEl.duration || 30 });
   }
 
-  function playArenaAudio(url, startTime = 0) {
-    stopOrFadeOutBinderAudio(0);
-    if (!arenaAudioEl || !url) return;
+  let isArenaBgLooping = false;
+  let isTransitioningToLoop = false;
+
+  function playArenaAudio(url, startTime = 0, isLoop = false) {
+    stopBinderAudio();
+    const activeEl = getActiveArenaEl();
+    if (!activeEl || !url) return;
 
     try {
-      arenaAudioEl.pause();
-      arenaAudioEl.volume = 1;
-      if (arenaAudioEl.src !== url) {
-        arenaAudioEl.src = url;
+      isArenaBgLooping = isLoop;
+      isTransitioningToLoop = false;
+      // Filter: 100Hz highpass + 500Hz lowpass when looping
+      setArenaLowpassFilter(isLoop, 500, 100, 0.2);
+
+      [arenaAudioEl, arenaAudioElB].forEach((el) => {
+        if (el) connectMediaElement(el, true);
+      });
+
+      const inactiveEl = getInactiveArenaEl();
+      if (inactiveEl && !isLoop) {
+        try {
+          inactiveEl.pause();
+          inactiveEl.currentTime = 0;
+        } catch (e) {}
       }
-      arenaAudioEl.currentTime = startTime;
-      arenaAudioEl.play().catch(() => isArenaPlaying.set(false));
+
+      activeEl.pause();
+      const targetVol = isLoop ? 0.18 : 1.0;
+      activeEl.volume = targetVol;
+      if (activeEl.src !== url) {
+        activeEl.src = url;
+      }
+      activeEl.currentTime = startTime;
+      activeEl.play().catch(() => isArenaPlaying.set(false));
     } catch (e) {
       isArenaPlaying.set(false);
     }
   }
 
+  // Dual-Player Ping-Pong cross-fade transition
+  function triggerPingPongLoopTransition() {
+    const curEl = getActiveArenaEl();
+    const nextEl = getInactiveArenaEl();
+    if (!curEl || !nextEl || !curEl.src) return;
+
+    isTransitioningToLoop = true;
+    isArenaBgLooping = true;
+    // Engage bandpass filter: 100Hz highpass to 500Hz lowpass
+    setArenaLowpassFilter(true, 500, 100, 0.15);
+
+    // Fade out currently ending player over 600ms
+    if (arenaFadeInterval) clearInterval(arenaFadeInterval);
+    if (arenaFadeIntervalB) clearInterval(arenaFadeIntervalB);
+
+    if (activeArenaPlayerId === 'A') {
+      arenaFadeInterval = rampAudioVolume(curEl, 0, 600, () => {
+        try {
+          curEl.pause();
+          curEl.currentTime = 0;
+        } catch (e) {}
+      });
+    } else {
+      arenaFadeIntervalB = rampAudioVolume(curEl, 0, 600, () => {
+        try {
+          curEl.pause();
+          curEl.currentTime = 0;
+        } catch (e) {}
+      });
+    }
+
+    // Prepare and start next player from beginning with matching 600ms fade-in to 0.25
+    if (nextEl.src !== curEl.src) {
+      nextEl.src = curEl.src;
+    }
+    nextEl.currentTime = 0;
+    nextEl.volume = 0;
+    nextEl.play().then(() => {
+      activeArenaPlayerId = activeArenaPlayerId === 'A' ? 'B' : 'A';
+      isTransitioningToLoop = false;
+      const nextFade = rampAudioVolume(nextEl, 0.18, 600);
+      if (activeArenaPlayerId === 'A') {
+        arenaFadeInterval = nextFade;
+      } else {
+        arenaFadeIntervalB = nextFade;
+      }
+    }).catch(() => {});
+  }
+
   function toggleArenaAudio() {
     let track = $activeArenaTrack || $activeWinnerCard;
-    if (!track?.preview_url || !arenaAudioEl) return;
+    const activeEl = getActiveArenaEl();
+    if (!track?.preview_url || !activeEl) return;
 
-    if (arenaAudioEl.paused) {
-      stopOrFadeOutBinderAudio(0);
-      if (!arenaAudioEl.src || !arenaAudioEl.src.includes(track.preview_url)) {
-        playArenaAudio(track.preview_url);
+    if (activeEl.paused) {
+      stopBinderAudio();
+      if (!activeEl.src || !activeEl.src.includes(track.preview_url)) {
+        playArenaAudio(track.preview_url, 0, false);
       } else {
-        arenaAudioEl.play().catch(() => isArenaPlaying.set(false));
+        isArenaBgLooping = false;
+        setArenaLowpassFilter(false);
+        activeEl.volume = 1.0;
+        activeEl.play().catch(() => isArenaPlaying.set(false));
       }
     } else {
-      arenaAudioEl.pause();
+      activeEl.pause();
       isArenaPlaying.set(false);
     }
   }
 
   function seekArenaAudio(ratio) {
-    if (!arenaAudioEl) return;
-    const dur = arenaAudioEl.duration || 30;
+    const activeEl = getActiveArenaEl();
+    if (!activeEl) return;
+    const dur = activeEl.duration || 30;
     const target = ratio * dur;
     arenaAudioTime.set({ current: target, duration: dur });
     if (!isNaN(dur)) {
-      arenaAudioEl.currentTime = target;
+      activeEl.currentTime = target;
     }
   }
 
   function playBinderTrack(card) {
-    stopOrFadeOutArenaAudio(0);
+    stopArenaAudio();
     activeBinderTrack.set(card);
     if (!binderAudioEl || !card?.preview_url) {
-      stopOrFadeOutBinderAudio(0);
+      stopBinderAudio();
       return;
     }
 
     try {
+      connectMediaElement(binderAudioEl);
       binderAudioEl.pause();
       binderAudioEl.volume = 1;
       if (binderAudioEl.src !== card.preview_url) {
@@ -370,7 +258,7 @@
     if (!binderAudioEl || !$activeBinderTrack?.preview_url) return;
 
     if (binderAudioEl.paused) {
-      stopOrFadeOutArenaAudio(0);
+      stopArenaAudio();
       if (!binderAudioEl.src || !binderAudioEl.src.includes($activeBinderTrack.preview_url)) {
         playBinderTrack($activeBinderTrack);
       } else {
@@ -394,8 +282,6 @@
 
   function triggerRoll() {
     if ($isSpinning || !$isCrateReady) return;
-    stopOrFadeOutArenaAudio(750);
-    stopOrFadeOutBinderAudio(0);
     if (reelComponent) {
       reelComponent.executeSpin();
     }
@@ -438,11 +324,88 @@
 
   function handleRollComplete(winner, isNew) {
     activeArenaTrack.set(winner);
-    spawnShockwave(1.0);
-    ensureVisualizerLoop();
     if (winner.preview_url) {
-      playArenaAudio(winner.preview_url);
+      const activeEl = getActiveArenaEl();
+      if (activeEl && !activeEl.paused && activeEl.src && activeEl.src.includes(winner.preview_url)) {
+        // Same track is already playing; restore full volume and normal EQ smoothly
+        isArenaBgLooping = false;
+        setArenaLowpassFilter(false);
+        if (arenaFadeInterval) {
+          clearInterval(arenaFadeInterval);
+          arenaFadeInterval = null;
+        }
+        if (arenaFadeIntervalB) {
+          clearInterval(arenaFadeIntervalB);
+          arenaFadeIntervalB = null;
+        }
+        if (activeArenaPlayerId === 'A') {
+          arenaFadeInterval = rampAudioVolume(activeEl, 1.0, 300);
+        } else {
+          arenaFadeIntervalB = rampAudioVolume(activeEl, 1.0, 300);
+        }
+      } else {
+        // Different audio or not playing: start winner audio cleanly
+        playArenaAudio(winner.preview_url, 0, false);
+      }
     }
+  }
+
+  // Reactive audio ducking and lowpass filtering during rolls or modal views
+  // Arena audio engages the 500Hz lowpass filter and ducks during spinning
+  $: {
+    const activeEl = getActiveArenaEl();
+    const shouldFilter = $isSpinning || isArenaBgLooping;
+    // Faster, snappier lowpass ramp-down on roll launch (40ms vs 200ms)
+    const timeConstant = $isSpinning ? 0.04 : 0.15;
+    setArenaLowpassFilter(shouldFilter, 500, 100, timeConstant);
+
+    if (activeEl && !activeEl.paused && !isTransitioningToLoop) {
+      const shouldDuck = $isSpinning || Boolean($activeModal);
+      let targetVol = 1.0;
+      if (isArenaBgLooping) {
+        targetVol = shouldDuck ? 0.08 : 0.25;
+      } else {
+        targetVol = shouldDuck ? 0.25 : 1.0;
+      }
+      if (activeArenaPlayerId === 'A') {
+        if (arenaFadeInterval) {
+          clearInterval(arenaFadeInterval);
+          arenaFadeInterval = null;
+        }
+        arenaFadeInterval = rampAudioVolume(activeEl, targetVol, 350);
+      } else {
+        if (arenaFadeIntervalB) {
+          clearInterval(arenaFadeIntervalB);
+          arenaFadeIntervalB = null;
+        }
+        arenaFadeIntervalB = rampAudioVolume(activeEl, targetVol, 350);
+      }
+    }
+  }
+
+  // 2. Binder audio ducks when returning to roll arena ($activeModal !== 'binder') OR during spinning
+  $: {
+    if (binderAudioEl && !binderAudioEl.paused) {
+      const shouldDuck = $activeModal !== 'binder' || $isSpinning;
+      const targetVol = shouldDuck ? 0.25 : 1.0;
+      if (binderFadeInterval) {
+        clearInterval(binderFadeInterval);
+        binderFadeInterval = null;
+      }
+      binderFadeInterval = rampAudioVolume(binderAudioEl, targetVol, 350);
+    }
+  }
+
+  // Stop all playing music when user switches account / logs out
+  $: if (!$isCrateReady) {
+    stopArenaAudio();
+    stopBinderAudio();
+  }
+
+  // Restore the music fade gain when a new crate becomes ready.
+  // fadeOutMusic at logout leaves the bus at ~-80 dB; fadeInMusic brings it back.
+  $: if ($isCrateReady) {
+    fadeInMusic(0.15);
   }
 
   onDestroy(() => {
@@ -453,6 +416,15 @@
   });
 
   onMount(() => {
+    const unlockAudio = () => {
+      const ctx = getAudioContext();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume();
+      }
+    };
+    window.addEventListener('pointerdown', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
+
     const handleKeydown = (e) => {
       if (e.key === 'r' || e.key === 'R') {
         if ($isCrateReady && !$isSpinning && document.activeElement?.tagName !== 'INPUT') {
@@ -466,6 +438,8 @@
     window.addEventListener('keydown', handleKeydown);
 
     return () => {
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
       window.removeEventListener('keydown', handleKeydown);
     };
   });
@@ -489,19 +463,19 @@
       <div class="aura-orb aura-orb-secondary"></div>
     </div>
 
-    <!-- Audio-Reactive Radial Shockwave Canvas -->
-    <canvas
-      bind:this={visualizerCanvas}
-      class="audio-visualizer-canvas"
-      aria-hidden="true"
-    ></canvas>
+    <!-- Cyber Grid & Audio-Reactive IRFANJ Watermark Layer -->
+    <CyberGrid />
 
     <Hud />
 
     <main class="game-stage-body">
       <Reel bind:this={reelComponent} onRollComplete={handleRollComplete} />
 
-      <WinnerSpotlight onToggleAudio={toggleArenaAudio} onSeekAudio={seekArenaAudio} />
+      <WinnerSpotlight
+        onToggleAudio={toggleArenaAudio}
+        onSeekAudio={seekArenaAudio}
+        onWinnerArtLoaded={(url) => reelComponent?.updateWinnerArt(url)}
+      />
 
       <Deck onRoll={triggerRoll} />
     </main>
@@ -518,31 +492,82 @@
 
   <SettingsModal />
 
-  <!-- Hidden HTML5 Audio Previews -->
+  <!-- Hidden HTML5 Audio Previews (Dual Player Ping-Pong for gapless loop) -->
   <audio
     id="arenaAudioPlayer"
     bind:this={arenaAudioEl}
     crossorigin="anonymous"
     preload="none"
-    on:play={() => isArenaPlaying.set(true)}
-    on:pause={() => isArenaPlaying.set(false)}
-    on:ended={() => {
-      isArenaPlaying.set(false);
-      arenaAudioTime.set({ current: 0, duration: arenaAudioEl?.duration || 30 });
+    on:play={() => {
+      if (activeArenaPlayerId === 'A') isArenaPlaying.set(true);
+    }}
+    on:pause={() => {
+      if (activeArenaPlayerId === 'A' && (!arenaAudioElB || arenaAudioElB.paused)) {
+        isArenaPlaying.set(false);
+      }
     }}
     on:timeupdate={() => {
-      if (arenaAudioEl) {
+      if (activeArenaPlayerId === 'A' && arenaAudioEl) {
+        const cur = arenaAudioEl.currentTime || 0;
+        const dur = arenaAudioEl.duration || 30;
+        arenaAudioTime.set({ current: cur, duration: dur });
+
+        // If Auto-Roll is enabled in "on_track_end" mode, roll next track right as song ends!
+        const timeLeft = dur - cur;
+        if (timeLeft <= 0.65 && timeLeft > 0.05 && !arenaAudioEl.paused) {
+          if ($isAutoRolling && $autoRollMode === 'on_track_end' && !$isSpinning) {
+            triggerRoll();
+          } else if (!isTransitioningToLoop) {
+            triggerPingPongLoopTransition();
+          }
+        }
+      }
+    }}
+    on:loadedmetadata={() => {
+      if (activeArenaPlayerId === 'A' && arenaAudioEl) {
         arenaAudioTime.set({
           current: arenaAudioEl.currentTime || 0,
           duration: arenaAudioEl.duration || 30,
         });
       }
     }}
+  ></audio>
+
+  <audio
+    id="arenaAudioPlayerB"
+    bind:this={arenaAudioElB}
+    crossorigin="anonymous"
+    preload="none"
+    on:play={() => {
+      if (activeArenaPlayerId === 'B') isArenaPlaying.set(true);
+    }}
+    on:pause={() => {
+      if (activeArenaPlayerId === 'B' && (!arenaAudioEl || arenaAudioEl.paused)) {
+        isArenaPlaying.set(false);
+      }
+    }}
+    on:timeupdate={() => {
+      if (activeArenaPlayerId === 'B' && arenaAudioElB) {
+        const cur = arenaAudioElB.currentTime || 0;
+        const dur = arenaAudioElB.duration || 30;
+        arenaAudioTime.set({ current: cur, duration: dur });
+
+        // If Auto-Roll is enabled in "on_track_end" mode, roll next track right as song ends!
+        const timeLeft = dur - cur;
+        if (timeLeft <= 0.65 && timeLeft > 0.05 && !arenaAudioElB.paused) {
+          if ($isAutoRolling && $autoRollMode === 'on_track_end' && !$isSpinning) {
+            triggerRoll();
+          } else if (!isTransitioningToLoop) {
+            triggerPingPongLoopTransition();
+          }
+        }
+      }
+    }}
     on:loadedmetadata={() => {
-      if (arenaAudioEl) {
+      if (activeArenaPlayerId === 'B' && arenaAudioElB) {
         arenaAudioTime.set({
-          current: arenaAudioEl.currentTime || 0,
-          duration: arenaAudioEl.duration || 30,
+          current: arenaAudioElB.currentTime || 0,
+          duration: arenaAudioElB.duration || 30,
         });
       }
     }}

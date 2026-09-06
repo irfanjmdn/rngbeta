@@ -43,6 +43,29 @@ def extract_user_id(profile_input):
         return profile_input.split(":")[-1].strip()
     return profile_input.split("?")[0].strip()
 
+def scrape_user_profile(user_id):
+    """Scrape display name and avatar URL from Spotify profile via OpenGraph metadata."""
+    url = f"https://open.spotify.com/user/{user_id}"
+    # Crawler user-agent prompts Spotify to return pre-rendered OpenGraph metadata
+    req = urllib.request.Request(url, headers={"User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"})
+    info = {"displayName": user_id, "avatarUrl": None}
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+        m_title = re.search(r'property=[\'"]og:title[\'"]\s+content=[\'"]([^\'"]+)[\'"]', html)
+        if m_title:
+            name = m_title.group(1).strip()
+            if name and name.lower() != "spotify":
+                info["displayName"] = name
+        m_img = re.search(r'property=[\'"]og:image[\'"]\s+content=[\'"]([^\'"]+)[\'"]', html)
+        if m_img:
+            img_url = m_img.group(1).strip()
+            if img_url and ("spotifycdn.com" in img_url or "scdn.co" in img_url):
+                info["avatarUrl"] = img_url
+    except Exception:
+        pass
+    return info
+
 def scrape_playlists_urllib(user_id):
     """Scrape playlist IDs from profile using urllib."""
     url = f"https://open.spotify.com/user/{user_id}"
@@ -553,9 +576,16 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
             log_msg(f"Rarity Distribution -> Mythic: {mythic_cnt}, Legendary: {legend_cnt}, Epic: {epic_cnt}, Rare: {rare_cnt}, Uncommon: {uncommon_cnt}, Common: {common_cnt}", "info")
             log_msg("Crate RNG initialized. Ready to roll!", "success")
 
+            log_msg(f"Fetching user profile details for '{user_id}'...", "info")
+            user_profile = scrape_user_profile(user_id)
+            if user_profile.get("displayName"):
+                log_msg(f"Profile verified: {user_profile['displayName']}", "success")
+
             send_event({
                 "type": "ready",
-                "userId": user_id,
+                "userId": user_profile.get("displayName") or user_id,
+                "rawUserId": user_id,
+                "avatarUrl": user_profile.get("avatarUrl"),
                 "playlistsCount": len(playlists_data),
                 "tracksCount": len(all_tracks),
                 "tracks": all_tracks,

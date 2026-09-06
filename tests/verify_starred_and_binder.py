@@ -19,7 +19,10 @@ async def run_feature_tests():
 
         print("1. Loading app...")
         await page.goto(BASE_URL)
-        await page.wait_for_load_state("networkidle")
+        try:
+            await page.wait_for_load_state("networkidle", timeout=2000)
+        except Exception:
+            await page.wait_for_load_state("domcontentloaded")
 
         # Load demo profile
         await page.click("#btnDemoIrfan")
