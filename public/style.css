@@ -2710,3 +2710,106 @@ a.meta-tag.source-tag:hover strong {
 .btn-settings-test:active {
   transform: translateY(0);
 }
+
+/* Fullscreen Desktop Notice Screen */
+.desktop-reminder-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #080a0e;
+  padding: 24px;
+  animation: reminderFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.desktop-reminder-screen.hidden {
+  display: none !important;
+}
+
+@keyframes reminderFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.reminder-modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+}
+
+.reminder-icon {
+  width: 48px;
+  height: 48px;
+  color: #64748b;
+  flex-shrink: 0;
+  margin-bottom: 4px;
+}
+
+.reminder-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.01em;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.reminder-desc {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 480px;
+}
+
+.btn-agree-notice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+  height: 46px;
+  padding: 0 40px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #000000;
+  background: var(--brand-green);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.btn-agree-notice:hover {
+  background: var(--brand-green-hover);
+  transform: translateY(-1px);
+  box-shadow: none;
+}
+
+.btn-agree-notice:active {
+  transform: translateY(1px);
+}
+

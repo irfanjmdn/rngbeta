@@ -450,6 +450,8 @@
   const debugTerminal = document.getElementById('debugTerminal');
 
   const gameArenaScreen = document.getElementById('gameArenaScreen');
+  const desktopReminderScreen = document.getElementById('desktopReminderScreen');
+  const btnAgreeNotice = document.getElementById('btnAgreeNotice');
   const hudAccountSub = document.getElementById('hudAccountSub');
   const hudMastery = document.getElementById('hudMastery');
   const hudRolls = document.getElementById('hudRolls');
@@ -734,12 +736,15 @@
     updateGameTelemetry();
     updateRatesModal();
 
-    // Switch screens
+    // Switch screens: show desktop optimization reminder (once per session)
     onboardingScreen.classList.add('hidden');
-    gameArenaScreen.classList.remove('hidden');
-
-    // Populate initial resting reel
-    buildInitialReel();
+    const alreadyAgreed = sessionStorage && sessionStorage.getItem('desktopNoticeAgreed') === '1';
+    if (desktopReminderScreen && !alreadyAgreed) {
+      desktopReminderScreen.classList.remove('hidden');
+    } else {
+      gameArenaScreen.classList.remove('hidden');
+      buildInitialReel();
+    }
   }
 
   function buildInitialReel() {
@@ -2251,11 +2256,41 @@
     resetWinnerSpotlight();
     resetBinder();
 
+    if (desktopReminderScreen) desktopReminderScreen.classList.add('hidden');
     gameArenaScreen.classList.add('hidden');
     onboardingScreen.classList.remove('hidden');
   });
 
+  if (btnAgreeNotice) {
+    btnAgreeNotice.addEventListener('click', () => {
+      try {
+        const ctx = getAudioContext();
+        if (ctx) {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(440, ctx.currentTime);
+          gain.gain.setValueAtTime(0.15, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.05);
+        }
+      } catch (e) {}
+
+      if (desktopReminderScreen) desktopReminderScreen.classList.add('hidden');
+      try { sessionStorage.setItem('desktopNoticeAgreed', '1'); } catch (e) {}
+      gameArenaScreen.classList.remove('hidden');
+      buildInitialReel();
+    });
+  }
+
   window.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && desktopReminderScreen && !desktopReminderScreen.classList.contains('hidden')) {
+      btnAgreeNotice.click();
+      return;
+    }
     if (e.key === 'r' || e.key === 'R') {
       if (!gameArenaScreen.classList.contains('hidden') && !isSpinning && document.activeElement.tagName !== 'INPUT') {
         executeSpin();

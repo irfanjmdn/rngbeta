@@ -246,39 +246,102 @@ body {
   cursor: pointer;
 }
 
-.desktop-reminder {
+/* Fullscreen Desktop Notice Screen */
+.desktop-reminder-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  padding: 8px 12px;
-  background: rgba(245, 158, 11, 0.06);
-  border: 1px solid rgba(245, 158, 11, 0.22);
-  border-radius: 4px;
-  font-family: var(--font-body);
-  font-size: 12px;
-  color: #CBD5E1;
+  justify-content: center;
+  background: #080a0e;
+  padding: 24px;
+  animation: reminderFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.desktop-reminder svg {
-  color: #F59E0B;
+@keyframes reminderFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.reminder-modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+}
+
+.reminder-icon {
+  width: 48px;
+  height: 48px;
+  color: #64748b;
   flex-shrink: 0;
+  margin-bottom: 4px;
 }
 
-.desktop-reminder .reminder-tag {
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+.reminder-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.01em;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.reminder-desc {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 480px;
+}
+
+.btn-agree-notice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+  height: 46px;
+  padding: 0 40px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  background: rgba(245, 158, 11, 0.2);
-  color: #F59E0B;
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  padding: 1px 5px;
-  border-radius: 2px;
+  color: #000000;
+  background: var(--brand-green);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
 }
 
-.desktop-reminder .reminder-text {
-  letter-spacing: 0.01em;
+.btn-agree-notice:hover {
+  background: var(--brand-green-hover);
+  transform: translateY(-1px);
+  box-shadow: none;
+}
+
+.btn-agree-notice:active {
+  transform: translateY(1px);
 }
 
 /* Collapsible Live Progress & Debug Dropdown */

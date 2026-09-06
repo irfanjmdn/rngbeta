@@ -24,7 +24,19 @@
   import RatesModal from './components/RatesModal.svelte';
   import SettingsModal from './components/SettingsModal.svelte';
   import CyberGrid from './components/CyberGrid.svelte';
-  import { connectMediaElement, setArenaLowpassFilter, fadeInMusic, getAudioContext } from './lib/audio.js';
+  import { connectMediaElement, setArenaLowpassFilter, fadeInMusic, getAudioContext, playLogoutSquareSound } from './lib/audio.js';
+
+  let hasAgreedToDesktopNotice = typeof sessionStorage !== 'undefined'
+    ? sessionStorage.getItem('desktopNoticeAgreed') === '1'
+    : false;
+
+  function handleAgreeNotice() {
+    playLogoutSquareSound(1);
+    hasAgreedToDesktopNotice = true;
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('desktopNoticeAgreed', '1');
+    }
+  }
 
   let reelComponent;
   let arenaAudioEl;
@@ -426,8 +438,12 @@
     window.addEventListener('keydown', unlockAudio, { once: true });
 
     const handleKeydown = (e) => {
+      if (e.key === 'Enter' && $isCrateReady && !hasAgreedToDesktopNotice) {
+        handleAgreeNotice();
+        return;
+      }
       if (e.key === 'r' || e.key === 'R') {
-        if ($isCrateReady && !$isSpinning && document.activeElement?.tagName !== 'INPUT') {
+        if ($isCrateReady && hasAgreedToDesktopNotice && !$isSpinning && document.activeElement?.tagName !== 'INPUT') {
           triggerRoll();
         }
       }
@@ -451,8 +467,47 @@
     <Onboarding />
   </div>
 
-  <!-- 2. Crate RNG Game Arena View -->
-  <div class="game-viewport {$isCrateReady ? '' : 'hidden'}" id="gameArenaScreen">
+  <!-- 2. Fullscreen Desktop Notice Screen -->
+  {#if $isCrateReady && !hasAgreedToDesktopNotice}
+    <div class="desktop-reminder-screen" id="desktopReminderScreen">
+      <div class="reminder-modal-card">
+        <svg
+          width="48"
+          height="48"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="reminder-icon"
+          aria-hidden="true"
+        >
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+        </svg>
+
+        <h2 class="reminder-title">This game is only optimized for desktop.</h2>
+
+        <p class="reminder-desc">
+          Spotify Crate RNG uses layouts and effects that are not compatible with mobile interfaces.
+        </p>
+
+        <button
+          type="button"
+          class="btn-agree-notice"
+          id="btnAgreeNotice"
+          on:click={handleAgreeNotice}
+        >
+          I Agree
+        </button>
+      </div>
+    </div>
+  {/if}
+
+  <!-- 3. Crate RNG Game Arena View -->
+  <div class="game-viewport {$isCrateReady && hasAgreedToDesktopNotice ? '' : 'hidden'}" id="gameArenaScreen">
     <!-- Ambient Reactive Aura Layer -->
     <div
       class="ambient-aura-layer {$isSpinning ? 'is-spinning' : ''}"
