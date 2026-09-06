@@ -666,35 +666,35 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
                 send_event({"type": "error", "message": f"Could not find tracks for Last.fm user '{lastfm_user}'."})
                 return
 
-                mythic_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "mythic")
-                legend_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "legendary")
-                epic_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "epic")
-                rare_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "rare")
-                uncommon_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "uncommon")
-                common_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "common")
+            mythic_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "mythic")
+            legend_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "legendary")
+            epic_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "epic")
+            rare_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "rare")
+            uncommon_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "uncommon")
+            common_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "common")
 
-                log_msg(f"Library compiled: {len(lf_tracks)} unique tracks from Last.fm listening history.", "success")
-                log_msg(f"Rarity Distribution -> Mythic: {mythic_cnt}, Legendary: {legend_cnt}, Epic: {epic_cnt}, Rare: {rare_cnt}, Uncommon: {uncommon_cnt}, Common: {common_cnt}", "info")
-                log_msg("Crate RNG initialized. Ready to roll!", "success")
+            log_msg(f"Library compiled: {len(lf_tracks)} unique tracks from Last.fm listening history.", "success")
+            log_msg(f"Rarity Distribution -> Mythic: {mythic_cnt}, Legendary: {legend_cnt}, Epic: {epic_cnt}, Rare: {rare_cnt}, Uncommon: {uncommon_cnt}, Common: {common_cnt}", "info")
+            log_msg("Crate RNG initialized. Ready to roll!", "success")
 
-                send_event({
-                    "type": "ready",
-                    "userId": u_info.get("displayName") or lastfm_user,
-                    "rawUserId": lastfm_user,
-                    "avatarUrl": u_info.get("avatarUrl"),
-                    "playlistsCount": 1,
-                    "tracksCount": len(lf_tracks),
-                    "tracks": lf_tracks,
-                    "distribution": {
-                        "mythic": mythic_cnt,
-                        "legendary": legend_cnt,
-                        "epic": epic_cnt,
-                        "rare": rare_cnt,
-                        "uncommon": uncommon_cnt,
-                        "common": common_cnt
-                    }
-                })
-                return
+            send_event({
+                "type": "ready",
+                "userId": u_info.get("displayName") or lastfm_user,
+                "rawUserId": lastfm_user,
+                "avatarUrl": u_info.get("avatarUrl"),
+                "playlistsCount": 1,
+                "tracksCount": len(lf_tracks),
+                "tracks": lf_tracks,
+                "distribution": {
+                    "mythic": mythic_cnt,
+                    "legendary": legend_cnt,
+                    "epic": epic_cnt,
+                    "rare": rare_cnt,
+                    "uncommon": uncommon_cnt,
+                    "common": common_cnt
+                }
+            })
+            return
 
             if not user_id:
                 log_msg("Invalid Spotify profile link or username provided.", "error")

@@ -249,57 +249,7 @@ export async function fetchAndBuildCrate(inputStr, forceRefresh = false) {
   }
 
   appendLog(`Initiating Last.fm request for user: ${lastfmUser}`, 'system');
-
-  const isStaticHost = typeof window !== 'undefined' && (
-    window.location.hostname.endsWith('github.io') ||
-    window.location.protocol === 'file:'
-  );
-
-  if (isStaticHost) {
-    await loadLastfmCrateClient(lastfmUser);
-    return;
-  }
-
-  try {
-    const response = await fetch('/api/fetch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile_url: profileUrl, force_refresh: forceRefresh }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Server returned HTTP ${response.status}`);
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      const lines = buffer.split('\n\n');
-      buffer = lines.pop(); // Keep remainder
-
-      for (const block of lines) {
-        const trimmed = block.trim();
-        if (trimmed.startsWith('data:')) {
-          const jsonStr = trimmed.slice(5).trim();
-          try {
-            const data = JSON.parse(jsonStr);
-            handleSseEvent(data);
-          } catch (e) {
-            console.error('SSE parse error:', e, jsonStr);
-          }
-        }
-      }
-    }
-  } catch (err) {
-    appendLog(`Connection notice: ${err.message}`, 'warning');
-    await loadStaticDemoCrate(profileUrl);
-  }
+  await loadLastfmCrateClient(lastfmUser);
 }
 
 function handleSseEvent(ev) {
