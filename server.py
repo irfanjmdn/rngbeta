@@ -359,23 +359,59 @@ def fetch_lastfm_crate(username, sse_log_fn=None):
             sse_log_fn(f"Notice getting user info: {e}", "warning")
 
     if sse_log_fn:
-        sse_log_fn(f"Fetching recent listening history from Last.fm for '{username}'...", "info")
+        sse_log_fn(f"Fetching listening history from Last.fm for '{username}'...", "info")
 
     raw_scrobbles = []
-    for page_num in (1, 2, 3):
-        tracks_url = f"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={urllib.parse.quote(username)}&limit=200&page={page_num}&api_key={api_key}&format=json"
+    # 1. Fetch page 1
+    p1_url = f"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={urllib.parse.quote(username)}&limit=200&page=1&api_key={api_key}&format=json"
+    total_pages = 1
+    try:
+        req = urllib.request.Request(p1_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            t_data = json.loads(resp.read().decode())
+            batch = t_data.get("recenttracks", {}).get("track", [])
+            raw_scrobbles.extend(batch)
+            total_pages = int(t_data.get("recenttracks", {}).get("@attr", {}).get("totalPages", 1))
+            total_scrobbles = int(t_data.get("recenttracks", {}).get("@attr", {}).get("total", len(batch)))
+            if sse_log_fn:
+                sse_log_fn(f"Found {total_scrobbles:,} all-time scrobbles across {total_pages} pages.", "info")
+    except Exception as e:
+        if sse_log_fn:
+            sse_log_fn(f"Notice fetching initial page: {e}", "warning")
+
+    if not raw_scrobbles:
+        return None, None
+
+    # Build timeline pages spanning newest, intermediate milestones, and oldest scrobbles
+    if total_pages <= 6:
+        extra_pages = list(range(2, total_pages + 1))
+    else:
+        sampled = {
+            2, 3,
+            round(total_pages * 0.25),
+            round(total_pages * 0.50),
+            round(total_pages * 0.75),
+            total_pages - 1,
+            total_pages
+        }
+        sampled.discard(1)
+        extra_pages = sorted([p for p in sampled if 1 < p <= total_pages])
+
+    if extra_pages and sse_log_fn:
+        sse_log_fn(f"Sampling listening timeline across pages: {', '.join(map(str, extra_pages))}...", "info")
+
+    for p in extra_pages:
+        tracks_url = f"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={urllib.parse.quote(username)}&limit=200&page={p}&api_key={api_key}&format=json"
         try:
             req = urllib.request.Request(tracks_url, headers=headers)
             with urllib.request.urlopen(req, timeout=10) as resp:
                 t_data = json.loads(resp.read().decode())
                 batch = t_data.get("recenttracks", {}).get("track", [])
-                if not batch:
-                    break
                 raw_scrobbles.extend(batch)
+            time.sleep(0.12)
         except Exception as e:
             if sse_log_fn:
-                sse_log_fn(f"Notice fetching page {page_num}: {e}", "warning")
-            break
+                sse_log_fn(f"Notice fetching page {p}: {e}", "warning")
 
     if not raw_scrobbles:
         return None, None

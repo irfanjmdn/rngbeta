@@ -18,11 +18,11 @@ import {
 } from './store.js';
 import { getAudioContext } from './audio.js';
 
+const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+
 async function loadStaticDemoCrate(profileUrl) {
   appendLog('Server API offline. Launching client-side static demo...', 'warning');
   appendLog('Reminder: This game is only optimized for desktop screens.', 'info');
-
-  const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 
   await wait(180);
   appendLog(`Parsing target Spotify profile: ${profileUrl}`, 'info');
@@ -88,24 +88,65 @@ async function loadLastfmCrateClient(username) {
     appendLog(`User info notice: ${e.message}`, 'warning');
   }
 
-  appendLog(`Fetching recent listening history from Last.fm for '${displayName}'...`, 'info');
+  appendLog(`Fetching listening history from Last.fm for '${displayName}'...`, 'info');
   try {
     const rawScrobbles = [];
-    for (const pageNum of [1, 2, 3]) {
-      try {
-        const tRes = await fetch(`https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${encodeURIComponent(username)}&limit=200&page=${pageNum}&api_key=${apiKey}&format=json`);
-        if (!tRes.ok) break;
-        const tData = await tRes.json();
-        const batch = tData.recenttracks?.track || [];
-        if (!batch.length) break;
-        rawScrobbles.push(...batch);
-      } catch (e) {
-        break;
-      }
+
+    // 1. Fetch page 1 to inspect total scrobbles and totalPages
+    const p1Res = await fetch(`https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${encodeURIComponent(username)}&limit=200&page=1&api_key=${apiKey}&format=json`);
+    if (!p1Res.ok) {
+      throw new Error(`Last.fm returned HTTP ${p1Res.status}`);
+    }
+    const p1Data = await p1Res.json();
+    const p1Batch = p1Data.recenttracks?.track || [];
+    if (!p1Batch.length) {
+      throw new Error(`No recent tracks found for Last.fm user '${username}'`);
+    }
+    rawScrobbles.push(...p1Batch);
+
+    const totalPages = parseInt(p1Data.recenttracks?.['@attr']?.totalPages || '1', 10);
+    const totalScrobbles = parseInt(p1Data.recenttracks?.['@attr']?.total || String(p1Batch.length), 10);
+    appendLog(`Found ${totalScrobbles.toLocaleString()} all-time scrobbles across ${totalPages} pages.`, 'info');
+
+    // Build timeline pages spanning newest, intermediate milestones, and oldest scrobbles
+    let extraPages = [];
+    if (totalPages <= 6) {
+      for (let p = 2; p <= totalPages; p++) extraPages.push(p);
+    } else {
+      const sampled = new Set([
+        2, 3,
+        Math.round(totalPages * 0.25),
+        Math.round(totalPages * 0.50),
+        Math.round(totalPages * 0.75),
+        totalPages - 1,
+        totalPages
+      ]);
+      sampled.delete(1);
+      extraPages = Array.from(sampled).filter(p => p > 1 && p <= totalPages).sort((a, b) => a - b);
     }
 
-    if (!rawScrobbles.length) {
-      throw new Error(`No recent tracks found for Last.fm user '${username}'`);
+    if (extraPages.length > 0) {
+      appendLog(`Sampling listening timeline across pages: ${extraPages.join(', ')}...`, 'info');
+      // Fetch in pairs with brief pause to respect rate limits
+      for (let i = 0; i < extraPages.length; i += 2) {
+        const slice = extraPages.slice(i, i + 2);
+        const batchResults = await Promise.all(slice.map(async (pageNum) => {
+          try {
+            const res = await fetch(`https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${encodeURIComponent(username)}&limit=200&page=${pageNum}&api_key=${apiKey}&format=json`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            return data.recenttracks?.track || [];
+          } catch (e) {
+            return [];
+          }
+        }));
+        for (const b of batchResults) {
+          rawScrobbles.push(...b);
+        }
+        if (i + 2 < extraPages.length) {
+          await wait(120);
+        }
+      }
     }
 
     const nowTs = Math.floor(Date.now() / 1000);
