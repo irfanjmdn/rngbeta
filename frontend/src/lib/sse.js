@@ -20,6 +20,7 @@ import { getAudioContext } from './audio.js';
 
 async function loadStaticDemoCrate(profileUrl) {
   appendLog('Server API offline. Launching client-side static demo...', 'warning');
+  appendLog('Reminder: This game is only optimized for desktop screens.', 'info');
 
   const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 
