@@ -139,11 +139,13 @@ function processPlaylistEntity(entity) {
   };
 }
 
+const DEFAULT_PROXY_URL = 'https://spotify-crate-proxy.ahmad-irfan-120707.workers.dev';
+
 export function getSpotifyProxyUrl() {
   if (typeof window !== 'undefined') {
-    return localStorage.getItem('crate_spotify_proxy_url') || '';
+    return localStorage.getItem('crate_spotify_proxy_url') || DEFAULT_PROXY_URL;
   }
-  return '';
+  return DEFAULT_PROXY_URL;
 }
 
 export function setSpotifyProxyUrl(url) {
