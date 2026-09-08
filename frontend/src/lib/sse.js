@@ -25,7 +25,7 @@ import { loadSpotifyCrateClient, loadStaticDemoCrate } from './modes/spotifyEngi
  * Shared SSE event dispatcher factory.
  * Scopes user data and state initialization to the selected mode.
  */
-function createSseHandler(mode) {
+export function createSseHandler(mode) {
   return function handleSseEvent(ev) {
     if (ev.type === 'log') {
       appendLog(ev.message, ev.level, ev.time);

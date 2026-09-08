@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   import {
     debugLogs,
     debugStatus,
@@ -7,10 +8,20 @@
   } from '../lib/store.js';
   import { fetchAndBuildCrate, loadDemoCrateDirect } from '../lib/sse.js';
   import { getSpotifyProxyUrl, setSpotifyProxyUrl } from '../lib/modes/spotifyEngine.js';
+  import SpotifyConnectView from './SpotifyConnectView.svelte';
 
   // Screen state: 'select' (First thing: 2 big buttons) | 'entry' (Input card)
   let currentStep = 'select';
   let selectedMode = 'lastfm'; // 'lastfm' | 'spotify'
+  let spotifySubView = 'connect'; // 'connect' | 'direct'
+
+  onMount(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
+      selectedMode = 'spotify';
+      currentStep = 'entry';
+      spotifySubView = 'connect';
+    }
+  });
 
   let wasCrateReady = false;
   $: {
@@ -162,70 +173,90 @@
             </button>
           </div>
         {:else}
-          <label for="inputSpotifyProfile" class="input-label">SPOTIFY PLAYLIST URL</label>
-          <div class="input-group">
-            <input
-              type="text"
-              id="inputSpotifyProfile"
-              class="input-profile input-profile-spotify"
-              placeholder="https://open.spotify.com/playlist/..."
-              autocomplete="off"
-              spellcheck="false"
-              bind:value={spotifyInput}
-              required
+          {#if spotifySubView === 'connect'}
+            <SpotifyConnectView
+              onDirectPlaylistMode={() => { spotifySubView = 'direct'; }}
+              onLoadDemo={handleLoadDemo}
             />
-            <button type="submit" class="btn-build-crate btn-build-spotify" id="btnBuildCrate" disabled={$isBuildingCrate}>
-              <span id="btnBuildText">{$isBuildingCrate ? 'Building Crate...' : 'Fetch & Build Crate'}</span>
-              <div class="btn-spinner {$isBuildingCrate ? '' : 'hidden'}" id="btnSpinner"></div>
-            </button>
-          </div>
-          <span class="proxy-hint">Tip: Paste any public playlist link (Share &rarr; Copy link to playlist). User profile discovery requires running python server.py.</span>
+          {:else}
+            <div class="form-nav-bar">
+              <button
+                type="button"
+                class="btn-back-mode"
+                on:click={() => { spotifySubView = 'connect'; }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                  <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                <span>SWITCH TO PROFILE &amp; FOLLOWED PLAYLISTS</span>
+              </button>
+            </div>
 
-          <div class="options-bar">
-            <label class="checkbox-label" for="chkForceRefresh">
+            <label for="inputSpotifyProfile" class="input-label">SPOTIFY PLAYLIST URL</label>
+            <div class="input-group">
               <input
-                type="checkbox"
-                id="chkForceRefresh"
-                bind:checked={forceRefresh}
+                type="text"
+                id="inputSpotifyProfile"
+                class="input-profile input-profile-spotify"
+                placeholder="https://open.spotify.com/playlist/..."
+                autocomplete="off"
+                spellcheck="false"
+                bind:value={spotifyInput}
+                required
               />
-              <span>Force live re-scrape (bypass local cache)</span>
-            </label>
-            <button
-              type="button"
-              class="btn-demo-link"
-              on:click={handleLoadDemo}
-              disabled={$isBuildingCrate}
-            >
-              Load Offline Demo Crate
-            </button>
-          </div>
+              <button type="submit" class="btn-build-crate btn-build-spotify" id="btnBuildCrate" disabled={$isBuildingCrate}>
+                <span id="btnBuildText">{$isBuildingCrate ? 'Building Crate...' : 'Fetch & Build Crate'}</span>
+                <div class="btn-spinner {$isBuildingCrate ? '' : 'hidden'}" id="btnSpinner"></div>
+              </button>
+            </div>
+            <span class="proxy-hint">Tip: Paste any public playlist link (Share &rarr; Copy link to playlist).</span>
 
-          <div class="proxy-config-bar">
-            <button
-              type="button"
-              class="btn-proxy-toggle"
-              on:click={() => { showProxyConfig = !showProxyConfig; }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-              </svg>
-              <span>{showProxyConfig ? 'Hide Cloudflare Worker Proxy Settings' : 'Cloudflare Worker Proxy (GitHub Pages)'}</span>
-            </button>
-
-            {#if showProxyConfig}
-              <div class="proxy-input-group">
+            <div class="options-bar">
+              <label class="checkbox-label" for="chkForceRefresh">
                 <input
-                  type="url"
-                  class="input-proxy-url"
-                  placeholder="e.g. https://spotify-proxy.your-name.workers.dev"
-                  bind:value={workerProxyUrl}
-                  on:input={handleSaveProxy}
+                  type="checkbox"
+                  id="chkForceRefresh"
+                  bind:checked={forceRefresh}
                 />
-                <span class="proxy-hint">Required on static GitHub Pages to proxy Spotify embed data. Local backend (server.py) works without proxy.</span>
-              </div>
-            {/if}
-          </div>
+                <span>Force live re-scrape (bypass local cache)</span>
+              </label>
+              <button
+                type="button"
+                class="btn-demo-link"
+                on:click={handleLoadDemo}
+                disabled={$isBuildingCrate}
+              >
+                Load Offline Demo Crate
+              </button>
+            </div>
+
+            <div class="proxy-config-bar">
+              <button
+                type="button"
+                class="btn-proxy-toggle"
+                on:click={() => { showProxyConfig = !showProxyConfig; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+                <span>{showProxyConfig ? 'Hide Cloudflare Worker Proxy Settings' : 'Cloudflare Worker Proxy (GitHub Pages)'}</span>
+              </button>
+
+              {#if showProxyConfig}
+                <div class="proxy-input-group">
+                  <input
+                    type="url"
+                    class="input-proxy-url"
+                    placeholder="e.g. https://spotify-proxy.your-name.workers.dev"
+                    bind:value={workerProxyUrl}
+                    on:input={handleSaveProxy}
+                  />
+                  <span class="proxy-hint">Required on static GitHub Pages to proxy Spotify embed data. Local backend (server.py) works without proxy.</span>
+                </div>
+              {/if}
+            </div>
+          {/if}
         {/if}
       </form>
 
