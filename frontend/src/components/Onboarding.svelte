@@ -162,13 +162,13 @@
             </button>
           </div>
         {:else}
-          <label for="inputSpotifyProfile" class="input-label">SPOTIFY PLAYLIST OR PROFILE URL</label>
+          <label for="inputSpotifyProfile" class="input-label">SPOTIFY PLAYLIST URL</label>
           <div class="input-group">
             <input
               type="text"
               id="inputSpotifyProfile"
               class="input-profile input-profile-spotify"
-              placeholder="https://open.spotify.com/playlist/... or profile URL"
+              placeholder="https://open.spotify.com/playlist/..."
               autocomplete="off"
               spellcheck="false"
               bind:value={spotifyInput}
@@ -179,6 +179,7 @@
               <div class="btn-spinner {$isBuildingCrate ? '' : 'hidden'}" id="btnSpinner"></div>
             </button>
           </div>
+          <span class="proxy-hint">Tip: Paste any public playlist link (Share &rarr; Copy link to playlist). User profile discovery requires running python server.py.</span>
 
           <div class="options-bar">
             <label class="checkbox-label" for="chkForceRefresh">
