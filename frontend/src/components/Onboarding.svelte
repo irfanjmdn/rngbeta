@@ -20,7 +20,7 @@
   }
 
   let lastfmUsername = 'rj';
-  let spotifyInput = 'https://open.spotify.com/user/2jp1yf3h1h49zye21bxnxk0w5';
+  let spotifyInput = '';
   let forceRefresh = false;
   let terminalEl;
 
@@ -95,7 +95,7 @@
 
           <div class="mode-card-content">
             <h2 class="mode-big-title">SPOTIFY</h2>
-            <p class="mode-big-desc">Roll tracks from your public playlists.</p>
+            <p class="mode-big-desc">Roll tracks from public playlists or direct playlist links.</p>
           </div>
         </button>
       </div>
@@ -127,7 +127,7 @@
 
       <p class="onboarding-desc">
         {selectedMode === 'spotify'
-          ? 'Enter a public Spotify profile to scan playlists and build your crate.'
+          ? 'Enter a public Spotify playlist link or profile to scan tracks and build your crate.'
           : 'Enter a public Last.fm profile to scan listening history and build your crate.'}
       </p>
 
@@ -151,13 +151,13 @@
             </button>
           </div>
         {:else}
-          <label for="inputSpotifyProfile" class="input-label">SPOTIFY PROFILE URL OR USERNAME</label>
+          <label for="inputSpotifyProfile" class="input-label">SPOTIFY PLAYLIST OR PROFILE URL</label>
           <div class="input-group">
             <input
               type="text"
               id="inputSpotifyProfile"
               class="input-profile input-profile-spotify"
-              placeholder="https://open.spotify.com/user/2jp1yf3h1h49zye21bxnxk0w5"
+              placeholder="https://open.spotify.com/playlist/... or profile URL"
               autocomplete="off"
               spellcheck="false"
               bind:value={spotifyInput}

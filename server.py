@@ -16,6 +16,7 @@ import sys
 import time
 import functools
 import statistics
+import hashlib
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(BASE_DIR, "dist")
@@ -32,16 +33,28 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9"
 }
 
+def extract_spotify_target(input_str):
+    """Detect whether input is a playlist URL/ID or user profile URL/ID."""
+    raw = input_str.strip()
+    if "spotify.com/playlist/" in raw:
+        pid = raw.split("spotify.com/playlist/")[1].split("?")[0].split("/")[0].strip()
+        return ("playlist", pid)
+    if raw.startswith("spotify:playlist:"):
+        pid = raw.split(":")[-1].strip()
+        return ("playlist", pid)
+    if "spotify.com/user/" in raw:
+        uid = raw.split("spotify.com/user/")[1].split("?")[0].split("/")[0].strip()
+        return ("user", uid)
+    if raw.startswith("spotify:user:"):
+        uid = raw.split(":")[-1].strip()
+        return ("user", uid)
+    clean = raw.split("?")[0].strip()
+    return ("user", clean)
+
 def extract_user_id(profile_input):
-    """Extract clean Spotify user ID from URL or raw username."""
-    profile_input = profile_input.strip()
-    if "spotify.com/user/" in profile_input:
-        part = profile_input.split("spotify.com/user/")[1]
-        user_id = part.split("?")[0].split("/")[0].strip()
-        return user_id
-    if profile_input.startswith("spotify:user:"):
-        return profile_input.split(":")[-1].strip()
-    return profile_input.split("?")[0].strip()
+    """Extract clean Spotify user ID or playlist ID from URL or raw username."""
+    _, target_id = extract_spotify_target(profile_input)
+    return target_id
 
 def scrape_user_profile(user_id):
     """Scrape display name and avatar URL from Spotify profile via OpenGraph metadata."""
@@ -199,21 +212,27 @@ def compute_dynamic_rarity_tracks(playlists_data):
     prior_weight = 8.0  # Smooths tiny playlists (< 10 tracks) toward profile median
 
     # 1. Compute smooth scarcity scores
+    is_single_playlist = len(playlists_data) == 1
     scores = {}
     for key, t in track_map.items():
         p_list = t["playlists"]
         app_count = len(p_list)
 
-        eff_sizes = []
-        for p in p_list:
-            raw_n = max(1, p["count"])
-            # Bayesian smoothing: small playlists (< 10 tracks) smoothly regress toward median
-            smoothed_n = (raw_n + prior_weight * (median_playlist_size / 10.0)) / (1.0 + prior_weight / 10.0)
-            eff_sizes.append(smoothed_n)
+        if is_single_playlist:
+            # Single playlist: rank deterministically using track hash
+            h = int(hashlib.md5(key.encode("utf-8")).hexdigest()[:8], 16)
+            score = float(h)
+        else:
+            eff_sizes = []
+            for p in p_list:
+                raw_n = max(1, p["count"])
+                # Bayesian smoothing: small playlists (< 10 tracks) smoothly regress toward median
+                smoothed_n = (raw_n + prior_weight * (median_playlist_size / 10.0)) / (1.0 + prior_weight / 10.0)
+                eff_sizes.append(smoothed_n)
 
-        min_eff_size = min(eff_sizes)
-        # Scarcity: smaller effective playlist size = rarer; appearing in multiple playlists = more common
-        score = ((100.0 / min_eff_size) ** 1.3) / (app_count ** 0.75)
+            min_eff_size = min(eff_sizes)
+            # Scarcity: smaller effective playlist size = rarer; appearing in multiple playlists = more common
+            score = ((100.0 / min_eff_size) ** 1.3) / (app_count ** 0.75)
         scores[key] = score
 
     # 2. Percentile ranking across entire user crate
@@ -576,13 +595,96 @@ def handle_lastfm_fetch(profile_url, send_event, log_msg):
 # ==============================================================================
 # SECTION: SPOTIFY STREAM HANDLER (ISOLATED)
 # ==============================================================================
-def handle_spotify_fetch(user_id, send_event, log_msg, force_refresh=False):
+def handle_spotify_fetch(profile_input, send_event, log_msg, force_refresh=False):
     """Handle Spotify profile / playlist crate construction and SSE streaming."""
-    if not user_id:
-        log_msg("Invalid Spotify profile link or username provided.", "error")
-        send_event({"type": "error", "message": "Invalid profile link."})
+    if not profile_input:
+        log_msg("Invalid Spotify playlist link or profile provided.", "error")
+        send_event({"type": "error", "message": "Invalid Spotify link or profile."})
         return
 
+    target_type, target_id = extract_spotify_target(profile_input)
+
+    # --- Direct Playlist Import Flow ---
+    if target_type == "playlist":
+        log_msg(f"Target Spotify Playlist: {target_id}", "info")
+        cache_file = os.path.join(DATA_DIR, f"cache_playlist_{target_id}.json")
+        playlists_data = []
+
+        if os.path.exists(cache_file) and not force_refresh:
+            log_msg("Local cached playlist data found.", "success")
+            try:
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    playlists_data = json.load(f)
+                log_msg(f"Loaded {len(playlists_data[0].get('trackList', []))} tracks from local cache.", "info")
+            except Exception as e:
+                log_msg(f"Could not read cache: {e}. Re-fetching playlist...", "warning")
+                playlists_data = []
+
+        if not playlists_data:
+            log_msg(f"Extracting tracks directly from Spotify playlist '{target_id}'...", "info")
+            try:
+                entity = fetch_playlist_embed(target_id)
+            except Exception as err:
+                log_msg(f"Error fetching playlist: {err}", "error")
+                entity = None
+
+            if not entity or not entity.get("trackList"):
+                log_msg("Could not extract tracks from playlist. Ensure the playlist is public.", "error")
+                send_event({"type": "error", "message": "Could not extract tracks from playlist. Ensure the playlist is public."})
+                return
+
+            track_cnt = len(entity.get("trackList", []))
+            p_name = entity.get("name") or "Spotify Playlist"
+            log_msg(f"  -> '{p_name}' contains {track_cnt} tracks.", "success")
+            playlists_data = [entity]
+
+            try:
+                with open(cache_file, "w", encoding="utf-8") as f:
+                    json.dump(playlists_data, f, indent=2)
+                log_msg(f"Cached playlist '{target_id}' to disk.", "info")
+            except Exception:
+                pass
+
+        entity = playlists_data[0]
+        p_name = entity.get("name") or "Spotify Playlist"
+        cover_art = entity.get("coverArt", {})
+        avatar_url = cover_art["sources"][0]["url"] if isinstance(cover_art, dict) and cover_art.get("sources") else None
+
+        log_msg("Calculating dynamic rarity weights across all tracks...", "info")
+        all_tracks = compute_dynamic_rarity_tracks(playlists_data)
+
+        mythic_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "mythic")
+        legend_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "legendary")
+        epic_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "epic")
+        rare_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "rare")
+        uncommon_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "uncommon")
+        common_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "common")
+
+        log_msg(f"Library compiled: {len(all_tracks)} total unique tracks from playlist '{p_name}'.", "success")
+        log_msg(f"Rarity Distribution -> Mythic: {mythic_cnt}, Legendary: {legend_cnt}, Epic: {epic_cnt}, Rare: {rare_cnt}, Uncommon: {uncommon_cnt}, Common: {common_cnt}", "info")
+        log_msg("Crate RNG initialized. Ready to roll!", "success")
+
+        send_event({
+            "type": "ready",
+            "userId": p_name,
+            "rawUserId": target_id,
+            "avatarUrl": avatar_url,
+            "playlistsCount": 1,
+            "tracksCount": len(all_tracks),
+            "tracks": all_tracks,
+            "distribution": {
+                "mythic": mythic_cnt,
+                "legendary": legend_cnt,
+                "epic": epic_cnt,
+                "rare": rare_cnt,
+                "uncommon": uncommon_cnt,
+                "common": common_cnt
+            }
+        })
+        return
+
+    # --- User Profile Multi-Playlist Scan Flow ---
+    user_id = target_id
     log_msg(f"Target Spotify Account: {user_id}", "info")
     cache_file = os.path.join(DATA_DIR, f"cache_{user_id}.json")
 
@@ -850,7 +952,7 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
             if mode == "lastfm":
                 handle_lastfm_fetch(profile_url, send_event, log_msg)
             else:
-                handle_spotify_fetch(user_id, send_event, log_msg, force_refresh)
+                handle_spotify_fetch(profile_url, send_event, log_msg, force_refresh)
             return
 
         self.send_error(404, "Not Found")

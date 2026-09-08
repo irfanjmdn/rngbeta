@@ -78,7 +78,9 @@ async def main():
         btn_build_spotify = await page.wait_for_selector("#btnBuildCrate", timeout=5000)
         print("PASS: Spotify entry form loaded.")
 
-        # Build Spotify crate (loads cached data for test profile)
+        # Enter Spotify playlist and build crate
+        input_spotify = await page.wait_for_selector("#inputSpotifyProfile")
+        await input_spotify.fill("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M")
         await btn_build_spotify.click()
 
         # Check if desktop notice is needed or already agreed in session
