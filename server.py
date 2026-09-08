@@ -525,6 +525,161 @@ def fetch_lastfm_crate(username, sse_log_fn=None):
 
     return user_info, all_tracks
 
+
+# ==============================================================================
+# SECTION: LAST.FM STREAM HANDLER (ISOLATED)
+# ==============================================================================
+def handle_lastfm_fetch(profile_url, send_event, log_msg):
+    """Handle Last.fm scrobble crate construction and SSE streaming."""
+    lastfm_user = profile_url
+    if profile_url.startswith("lastfm:"):
+        lastfm_user = profile_url.split("lastfm:")[1].strip()
+    elif "last.fm/user/" in profile_url.lower():
+        lastfm_user = profile_url.split("last.fm/user/")[1].split("/")[0].split("?")[0].strip()
+
+    log_msg(f"Target Last.fm Account: {lastfm_user}", "info")
+    u_info, lf_tracks = fetch_lastfm_crate(lastfm_user, sse_log_fn=lambda m, lvl="info": log_msg(m, lvl))
+    if not lf_tracks:
+        send_event({"type": "error", "message": f"Could not find tracks for Last.fm user '{lastfm_user}'."})
+        return
+
+    mythic_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "mythic")
+    legend_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "legendary")
+    epic_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "epic")
+    rare_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "rare")
+    uncommon_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "uncommon")
+    common_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "common")
+
+    log_msg(f"Library compiled: {len(lf_tracks)} unique tracks from Last.fm listening history.", "success")
+    log_msg(f"Rarity Distribution -> Mythic: {mythic_cnt}, Legendary: {legend_cnt}, Epic: {epic_cnt}, Rare: {rare_cnt}, Uncommon: {uncommon_cnt}, Common: {common_cnt}", "info")
+    log_msg("Crate RNG initialized. Ready to roll!", "success")
+
+    send_event({
+        "type": "ready",
+        "userId": u_info.get("displayName") or lastfm_user,
+        "rawUserId": lastfm_user,
+        "avatarUrl": u_info.get("avatarUrl"),
+        "playlistsCount": 1,
+        "tracksCount": len(lf_tracks),
+        "tracks": lf_tracks,
+        "distribution": {
+            "mythic": mythic_cnt,
+            "legendary": legend_cnt,
+            "epic": epic_cnt,
+            "rare": rare_cnt,
+            "uncommon": uncommon_cnt,
+            "common": common_cnt
+        }
+    })
+
+
+# ==============================================================================
+# SECTION: SPOTIFY STREAM HANDLER (ISOLATED)
+# ==============================================================================
+def handle_spotify_fetch(user_id, send_event, log_msg, force_refresh=False):
+    """Handle Spotify profile / playlist crate construction and SSE streaming."""
+    if not user_id:
+        log_msg("Invalid Spotify profile link or username provided.", "error")
+        send_event({"type": "error", "message": "Invalid profile link."})
+        return
+
+    log_msg(f"Target Spotify Account: {user_id}", "info")
+    cache_file = os.path.join(DATA_DIR, f"cache_{user_id}.json")
+
+    # Check cache
+    playlists_data = []
+    if os.path.exists(cache_file) and not force_refresh:
+        log_msg("Local cached profile data found.", "success")
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                playlists_data = json.load(f)
+            log_msg(f"Loaded {len(playlists_data)} playlists from local cache.", "info")
+        except Exception as e:
+            log_msg(f"Could not read cache: {e}. Re-scraping...", "warning")
+            playlists_data = []
+
+    # If not in cache, scrape live
+    if not playlists_data:
+        log_msg(f"Scanning public playlists on Spotify profile: {user_id}...", "info")
+        found_playlists = scrape_playlists_urllib(user_id)
+        if len(found_playlists) < 3:
+            log_msg("Invoking browser engine for full playlist discovery...", "info")
+            def sse_sub(msg): log_msg(msg, "info")
+            pw_playlists = scrape_playlists_playwright(user_id, sse_sub)
+            found_playlists.update(pw_playlists)
+
+        log_msg(f"Discovered {len(found_playlists)} public playlists on profile.", "success")
+
+        if not found_playlists:
+            log_msg("No public playlists found on this profile.", "error")
+            send_event({"type": "error", "message": "No public playlists found."})
+            return
+
+        # Fetch tracks for each playlist via embed
+        total_p = len(found_playlists)
+        for idx, pid in enumerate(found_playlists.keys(), 1):
+            p_title = found_playlists[pid]
+            log_msg(f"[{idx}/{total_p}] Extracting playlist '{p_title}' ({pid})...", "info")
+            try:
+                entity = fetch_playlist_embed(pid)
+                if entity:
+                    playlists_data.append(entity)
+                    track_cnt = len(entity.get("trackList", []))
+                    log_msg(f"  -> '{entity.get('name')}' contains {track_cnt} tracks.", "success")
+                else:
+                    log_msg(f"  -> Warning: Embed data empty for {pid}", "warning")
+            except Exception as err:
+                log_msg(f"  -> Error fetching {pid}: {err}", "warning")
+            time.sleep(0.15)
+
+        # Save to cache
+        if playlists_data:
+            try:
+                with open(cache_file, "w", encoding="utf-8") as f:
+                    json.dump(playlists_data, f, indent=2)
+                log_msg(f"Cached {len(playlists_data)} playlists to disk.", "info")
+            except Exception:
+                pass
+
+    # Calculate dynamic rarity
+    log_msg("Calculating dynamic rarity weights across all tracks...", "info")
+    all_tracks = compute_dynamic_rarity_tracks(playlists_data)
+
+    mythic_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "mythic")
+    legend_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "legendary")
+    epic_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "epic")
+    rare_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "rare")
+    uncommon_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "uncommon")
+    common_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "common")
+
+    log_msg(f"Library compiled: {len(all_tracks)} total unique tracks across {len(playlists_data)} playlists.", "success")
+    log_msg(f"Rarity Distribution -> Mythic: {mythic_cnt}, Legendary: {legend_cnt}, Epic: {epic_cnt}, Rare: {rare_cnt}, Uncommon: {uncommon_cnt}, Common: {common_cnt}", "info")
+    log_msg("Crate RNG initialized. Ready to roll!", "success")
+
+    log_msg(f"Fetching user profile details for '{user_id}'...", "info")
+    user_profile = scrape_user_profile(user_id)
+    if user_profile.get("displayName"):
+        log_msg(f"Profile verified: {user_profile['displayName']}", "success")
+
+    send_event({
+        "type": "ready",
+        "userId": user_profile.get("displayName") or user_id,
+        "rawUserId": user_id,
+        "avatarUrl": user_profile.get("avatarUrl"),
+        "playlistsCount": len(playlists_data),
+        "tracksCount": len(all_tracks),
+        "tracks": all_tracks,
+        "distribution": {
+            "mythic": mythic_cnt,
+            "legendary": legend_cnt,
+            "epic": epic_cnt,
+            "rare": rare_cnt,
+            "uncommon": uncommon_cnt,
+            "common": common_cnt
+        }
+    })
+
+
 class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -671,6 +826,8 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
             user_id = extract_user_id(profile_url)
 
 
+            mode = payload.get("mode", "lastfm" if "last.fm" in profile_url.lower() or profile_url.startswith("lastfm:") else "spotify")
+
             # Start SSE Stream
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -690,148 +847,10 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
             def log_msg(text, level="info"):
                 send_event({"type": "log", "level": level, "message": text, "time": time.strftime("%H:%M:%S")})
 
-            lastfm_user = profile_url
-            if profile_url.startswith("lastfm:"):
-                lastfm_user = profile_url.split("lastfm:")[1].strip()
-            elif "last.fm/user/" in profile_url.lower():
-                lastfm_user = profile_url.split("last.fm/user/")[1].split("/")[0].split("?")[0].strip()
-
-            log_msg(f"Target Last.fm Account: {lastfm_user}", "info")
-            u_info, lf_tracks = fetch_lastfm_crate(lastfm_user, sse_log_fn=lambda m, lvl="info": log_msg(m, lvl))
-            if not lf_tracks:
-                send_event({"type": "error", "message": f"Could not find tracks for Last.fm user '{lastfm_user}'."})
-                return
-
-            mythic_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "mythic")
-            legend_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "legendary")
-            epic_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "epic")
-            rare_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "rare")
-            uncommon_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "uncommon")
-            common_cnt = sum(1 for t in lf_tracks if t["rarityTier"] == "common")
-
-            log_msg(f"Library compiled: {len(lf_tracks)} unique tracks from Last.fm listening history.", "success")
-            log_msg(f"Rarity Distribution -> Mythic: {mythic_cnt}, Legendary: {legend_cnt}, Epic: {epic_cnt}, Rare: {rare_cnt}, Uncommon: {uncommon_cnt}, Common: {common_cnt}", "info")
-            log_msg("Crate RNG initialized. Ready to roll!", "success")
-
-            send_event({
-                "type": "ready",
-                "userId": u_info.get("displayName") or lastfm_user,
-                "rawUserId": lastfm_user,
-                "avatarUrl": u_info.get("avatarUrl"),
-                "playlistsCount": 1,
-                "tracksCount": len(lf_tracks),
-                "tracks": lf_tracks,
-                "distribution": {
-                    "mythic": mythic_cnt,
-                    "legendary": legend_cnt,
-                    "epic": epic_cnt,
-                    "rare": rare_cnt,
-                    "uncommon": uncommon_cnt,
-                    "common": common_cnt
-                }
-            })
-            return
-
-            if not user_id:
-                log_msg("Invalid Spotify profile link or username provided.", "error")
-                send_event({"type": "error", "message": "Invalid profile link."})
-                return
-
-            log_msg(f"Target Spotify Account: {user_id}", "info")
-            cache_file = os.path.join(DATA_DIR, f"cache_{user_id}.json")
-
-            # Check cache
-            playlists_data = []
-            if os.path.exists(cache_file) and not force_refresh:
-                log_msg("Local cached profile data found.", "success")
-                try:
-                    with open(cache_file, "r", encoding="utf-8") as f:
-                        playlists_data = json.load(f)
-                    log_msg(f"Loaded {len(playlists_data)} playlists from local cache.", "info")
-                except Exception as e:
-                    log_msg(f"Could not read cache: {e}. Re-scraping...", "warning")
-                    playlists_data = []
-
-            # If not in cache, scrape live
-            if not playlists_data:
-                log_msg(f"Scanning public playlists on Spotify profile: {user_id}...", "info")
-                found_playlists = scrape_playlists_urllib(user_id)
-                if len(found_playlists) < 3:
-                    log_msg("Invoking browser engine for full playlist discovery...", "info")
-                    def sse_sub(msg): log_msg(msg, "info")
-                    pw_playlists = scrape_playlists_playwright(user_id, sse_sub)
-                    found_playlists.update(pw_playlists)
-
-                log_msg(f"Discovered {len(found_playlists)} public playlists on profile.", "success")
-
-                if not found_playlists:
-                    log_msg("No public playlists found on this profile.", "error")
-                    send_event({"type": "error", "message": "No public playlists found."})
-                    return
-
-                # Fetch tracks for each playlist via embed
-                total_p = len(found_playlists)
-                for idx, pid in enumerate(found_playlists.keys(), 1):
-                    p_title = found_playlists[pid]
-                    log_msg(f"[{idx}/{total_p}] Extracting playlist '{p_title}' ({pid})...", "info")
-                    try:
-                        entity = fetch_playlist_embed(pid)
-                        if entity:
-                            playlists_data.append(entity)
-                            track_cnt = len(entity.get("trackList", []))
-                            log_msg(f"  -> '{entity.get('name')}' contains {track_cnt} tracks.", "success")
-                        else:
-                            log_msg(f"  -> Warning: Embed data empty for {pid}", "warning")
-                    except Exception as err:
-                        log_msg(f"  -> Error fetching {pid}: {err}", "warning")
-                    time.sleep(0.15)
-
-                # Save to cache
-                if playlists_data:
-                    try:
-                        with open(cache_file, "w", encoding="utf-8") as f:
-                            json.dump(playlists_data, f, indent=2)
-                        log_msg(f"Cached {len(playlists_data)} playlists to disk.", "info")
-                    except Exception:
-                        pass
-
-            # Calculate dynamic rarity
-            log_msg("Calculating dynamic rarity weights across all tracks...", "info")
-            all_tracks = compute_dynamic_rarity_tracks(playlists_data)
-
-            mythic_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "mythic")
-            legend_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "legendary")
-            epic_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "epic")
-            rare_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "rare")
-            uncommon_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "uncommon")
-            common_cnt = sum(1 for t in all_tracks if t["rarityTier"] == "common")
-
-            log_msg(f"Library compiled: {len(all_tracks)} total unique tracks across {len(playlists_data)} playlists.", "success")
-            log_msg(f"Rarity Distribution -> Mythic: {mythic_cnt}, Legendary: {legend_cnt}, Epic: {epic_cnt}, Rare: {rare_cnt}, Uncommon: {uncommon_cnt}, Common: {common_cnt}", "info")
-            log_msg("Crate RNG initialized. Ready to roll!", "success")
-
-            log_msg(f"Fetching user profile details for '{user_id}'...", "info")
-            user_profile = scrape_user_profile(user_id)
-            if user_profile.get("displayName"):
-                log_msg(f"Profile verified: {user_profile['displayName']}", "success")
-
-            send_event({
-                "type": "ready",
-                "userId": user_profile.get("displayName") or user_id,
-                "rawUserId": user_id,
-                "avatarUrl": user_profile.get("avatarUrl"),
-                "playlistsCount": len(playlists_data),
-                "tracksCount": len(all_tracks),
-                "tracks": all_tracks,
-                "distribution": {
-                    "mythic": mythic_cnt,
-                    "legendary": legend_cnt,
-                    "epic": epic_cnt,
-                    "rare": rare_cnt,
-                    "uncommon": uncommon_cnt,
-                    "common": common_cnt
-                }
-            })
+            if mode == "lastfm":
+                handle_lastfm_fetch(profile_url, send_event, log_msg)
+            else:
+                handle_spotify_fetch(user_id, send_event, log_msg, force_refresh)
             return
 
         self.send_error(404, "Not Found")

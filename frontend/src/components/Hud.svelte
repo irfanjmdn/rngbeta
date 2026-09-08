@@ -1,6 +1,7 @@
 <script>
   import { onDestroy } from 'svelte';
   import {
+    activeMode,
     activeUserId,
     userAvatarUrl,
     rngTracks,
@@ -10,9 +11,13 @@
     rarestRolledInfo,
     unlockedCount,
     activeModal,
+    activeWinnerCard,
+    activeArenaTrack,
+    activeBinderTrack,
     isCrateReady,
     isSpinning,
     isAutoRolling,
+    isLoggingOut,
   } from '../lib/store.js';
   import {
     playUiTapSound,
@@ -34,7 +39,7 @@
   let seenUnlockedCount = 0;
   let activeUserKey = '';
 
-  $: currentKey = `crate_seen_binder_${$activeUserId || 'guest'}`;
+  $: currentKey = `crate_seen_binder_${$activeMode || 'lastfm'}_${$activeUserId || 'guest'}`;
 
   $: if (currentKey !== activeUserKey && typeof window !== 'undefined') {
     activeUserKey = currentKey;
@@ -122,11 +127,21 @@
     }
     isAutoRolling.set(false);
     activeModal.set(null);
-    holdCompleted = false;
-    holdProgress = 0;
-    showSquares = false;
-    squaresFilled = 0;
+    activeWinnerCard.set(null);
+    activeArenaTrack.set(null);
+    activeBinderTrack.set(null);
+    rngTracks.set([]);
+    isLoggingOut.set(true);
+
+    // Switch view to front page while the red wipe covers the screen
     isCrateReady.set(false);
+
+    // Fade out the logout transition shroud revealing the front page
+    setTimeout(() => {
+      holdCompleted = false;
+      holdProgress = 0;
+      isLoggingOut.set(false);
+    }, 280);
   }
 
   function handleHoldStart(e) {

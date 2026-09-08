@@ -14,6 +14,7 @@
     binderAudioTime,
     activeModal,
     rngTracks,
+    isLoggingOut,
   } from './lib/store.js';
 
   import Onboarding from './components/Onboarding.svelte';
@@ -506,6 +507,12 @@
   <div class={$isCrateReady ? 'hidden' : ''}>
     <Onboarding />
   </div>
+
+  <!-- Logout Transition Shroud -->
+  <div
+    class="logout-transition-shroud {$isLoggingOut ? 'is-active' : ''}"
+    aria-hidden="true"
+  ></div>
 
   <!-- 2. Fullscreen Desktop Notice Screen -->
   {#if $isCrateReady && !hasAgreedToDesktopNotice}

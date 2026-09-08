@@ -81,6 +81,20 @@
     }
   }
 
+  let lastLoadedTracks = null;
+  $: if ($rngTracks !== lastLoadedTracks) {
+    lastLoadedTracks = $rngTracks;
+    upcomingRollQueue = [];
+    if ($rngTracks && $rngTracks.length > 0) {
+      topUpUpcomingRolls();
+      if (reelTrack) {
+        buildInitialReel();
+      }
+    } else if (reelTrack) {
+      reelTrack.innerHTML = '';
+    }
+  }
+
   $: if ($rngTracks.length > 0 && upcomingRollQueue.length < 5) {
     topUpUpcomingRolls();
   }

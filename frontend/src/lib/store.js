@@ -1,6 +1,7 @@
 import { writable, derived } from 'svelte/store';
 import { playStarSound, playUnstarSound } from './audio.js';
 
+export const activeMode = writable('lastfm'); // 'lastfm' | 'spotify'
 export const activeUserId = writable(null);
 export const rngTracks = writable([]);
 export const playlistsCount = writable(0);
@@ -35,6 +36,7 @@ export const debugLogs = writable([
 export const debugStatus = writable('idle'); // 'idle' | 'active' | 'success' | 'error'
 export const isBuildingCrate = writable(false);
 export const isCrateReady = writable(false);
+export const isLoggingOut = writable(false);
 
 export const activeModal = writable(null); // 'binder' | 'rates' | 'settings' | null
 
@@ -74,31 +76,52 @@ export const rarestRolledInfo = derived([gameInventory, rngTracks], ([$inv, $tra
 
 export const rarestRolled = derived(rarestRolledInfo, ($info) => $info.name);
 
-// Load saved data for user
-export function loadUserData(userId) {
+function getStoreMode() {
+  let m = 'lastfm';
+  activeMode.subscribe((val) => {
+    if (val) m = val;
+  })();
+  return m;
+}
+
+// Load saved data for user scoped by mode
+export function loadUserData(userId, mode = null) {
   if (!userId) return;
+  const currentMode = mode || getStoreMode();
   try {
-    const savedInv = localStorage.getItem(`crate_rng_inv_${userId}`);
+    const modeInvKey = `crate_rng_inv_${currentMode}_${userId}`;
+    const modeRollsKey = `crate_rng_rolls_${currentMode}_${userId}`;
+    const modeTimesKey = `crate_rng_times_${currentMode}_${userId}`;
+    const modeStarredKey = `crate_starred_${currentMode}_${userId}`;
+
+    let savedInv = localStorage.getItem(modeInvKey);
+    let savedRolls = localStorage.getItem(modeRollsKey);
+    let savedTimes = localStorage.getItem(modeTimesKey);
+    let savedStarred = localStorage.getItem(modeStarredKey);
+
+    // Backwards compatibility for lastfm primary mode if mode key not yet written
+    if (!savedInv && currentMode === 'lastfm') {
+      savedInv = localStorage.getItem(`crate_rng_inv_${userId}`);
+      savedRolls = localStorage.getItem(`crate_rng_rolls_${userId}`);
+      savedTimes = localStorage.getItem(`crate_rng_times_${userId}`);
+      savedStarred = localStorage.getItem(`crate_starred_${userId}`);
+    }
+
     if (savedInv) gameInventory.set(JSON.parse(savedInv));
-
-    const savedRolls = localStorage.getItem(`crate_rng_rolls_${userId}`);
     if (savedRolls) gameRolls.set(parseInt(savedRolls, 10) || 0);
-
-    const savedTimes = localStorage.getItem(`crate_rng_times_${userId}`);
     if (savedTimes) gameInventoryTimestamps.set(JSON.parse(savedTimes));
-
-    const savedStarred = localStorage.getItem(`crate_starred_${userId}`);
     if (savedStarred) starredTrackIds.set(new Set(JSON.parse(savedStarred)));
   } catch (e) {}
 }
 
-export function saveUserData(userId, inv, rolls, times, starred) {
+export function saveUserData(userId, inv, rolls, times, starred, mode = null) {
   if (!userId) return;
+  const currentMode = mode || getStoreMode();
   try {
-    localStorage.setItem(`crate_rng_inv_${userId}`, JSON.stringify(inv));
-    localStorage.setItem(`crate_rng_rolls_${userId}`, rolls.toString());
-    localStorage.setItem(`crate_rng_times_${userId}`, JSON.stringify(times));
-    localStorage.setItem(`crate_starred_${userId}`, JSON.stringify([...starred]));
+    localStorage.setItem(`crate_rng_inv_${currentMode}_${userId}`, JSON.stringify(inv));
+    localStorage.setItem(`crate_rng_rolls_${currentMode}_${userId}`, rolls.toString());
+    localStorage.setItem(`crate_rng_times_${currentMode}_${userId}`, JSON.stringify(times));
+    localStorage.setItem(`crate_starred_${currentMode}_${userId}`, JSON.stringify([...starred]));
   } catch (e) {}
 }
 
@@ -122,7 +145,8 @@ export function toggleStar(trackId) {
     }
     if (currentUserId) {
       try {
-        localStorage.setItem(`crate_starred_${currentUserId}`, JSON.stringify([...next]));
+        const currentMode = getStoreMode();
+        localStorage.setItem(`crate_starred_${currentMode}_${currentUserId}`, JSON.stringify([...next]));
       } catch (e) {}
     }
     return next;
