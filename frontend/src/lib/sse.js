@@ -19,7 +19,7 @@ import {
 } from './store.js';
 import { getAudioContext } from './audio.js';
 import { loadLastfmCrateClient } from './modes/lastfmEngine.js';
-import { loadSpotifyCrateClient } from './modes/spotifyEngine.js';
+import { loadSpotifyCrateClient, loadStaticDemoCrate } from './modes/spotifyEngine.js';
 
 /**
  * Shared SSE event dispatcher factory.
@@ -90,4 +90,13 @@ export async function fetchAndBuildCrate(inputStr, mode = 'lastfm', forceRefresh
     appendLog(`Initiating Spotify request for input: ${cleanInput}`, 'system');
     await loadSpotifyCrateClient(cleanInput, forceRefresh, onEvent);
   }
+}
+
+export async function loadDemoCrateDirect(mode = 'spotify') {
+  getAudioContext();
+  isBuildingCrate.set(true);
+  debugStatus.set('active');
+  activeMode.set(mode);
+  const onEvent = createSseHandler(mode);
+  await loadStaticDemoCrate(onEvent);
 }

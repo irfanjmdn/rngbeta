@@ -958,6 +958,8 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
         self.send_error(404, "Not Found")
 
 class CrateRngServer(http.server.ThreadingHTTPServer):
+    allow_reuse_address = True
+
     def handle_error(self, request, client_address):
         # Ignore client disconnect / pipe errors cleanly
         exc_type, exc_val, _ = sys.exc_info()
