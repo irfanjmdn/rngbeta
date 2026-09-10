@@ -495,8 +495,8 @@
           {#key brandDisplayState}
             <div
               class="hud-brand-text-slide"
-              in:fly={{ y: 7, duration: 180, opacity: 0 }}
-              out:fly={{ y: -7, duration: 140, opacity: 0 }}
+              in:fly={{ y: 18, duration: 160, opacity: 1 }}
+              out:fly={{ y: -18, duration: 140, opacity: 1 }}
             >
               {#if brandDisplayState === 'holding'}
                 <span class="hud-brand-kaomoji">{currentHoldKaomoji}</span>
