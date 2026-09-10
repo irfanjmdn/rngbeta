@@ -931,10 +931,10 @@ body {
 
 .logout-hover-text {
   position: absolute;
-  font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 0.05em;
+  font-family: 'Caveat', 'Kalam', 'Comic Sans MS', cursive, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
   color: #000000;
   white-space: nowrap;
   opacity: 0;
@@ -942,10 +942,13 @@ body {
   transition: opacity 0.18s ease, transform 0.18s ease;
   pointer-events: none;
   user-select: none;
+  line-height: 1;
 }
 
 .logout-hover-text.is-holding-text {
-  font-size: 12px;
+  font-family: system-ui, -apple-system, 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif;
+  font-size: 12.5px;
+  font-weight: 400;
   letter-spacing: 0;
 }
 

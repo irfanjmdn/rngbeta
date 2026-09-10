@@ -270,7 +270,7 @@
     if (releaseTimer) clearTimeout(releaseTimer);
     releaseTimer = setTimeout(() => {
       showReleaseKaomoji = false;
-    }, 1800);
+    }, 400);
 
     shrinkStartProgress = holdProgress;
     shrinkStartTime = performance.now();
