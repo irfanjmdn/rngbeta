@@ -7,7 +7,6 @@
     isCrateReady,
   } from '../lib/store.js';
   import { fetchAndBuildCrate, loadDemoCrateDirect } from '../lib/sse.js';
-  import { getSpotifyProxyUrl, setSpotifyProxyUrl } from '../lib/modes/spotifyEngine.js';
   import SpotifyConnectView from './SpotifyConnectView.svelte';
 
   // Screen state: 'select' (First thing: 2 big buttons) | 'entry' (Input card)
@@ -33,14 +32,7 @@
 
   let lastfmUsername = 'rj';
   let spotifyInput = '';
-  let forceRefresh = false;
-  let workerProxyUrl = getSpotifyProxyUrl();
-  let showProxyConfig = false;
   let terminalEl;
-
-  function handleSaveProxy() {
-    setSpotifyProxyUrl(workerProxyUrl);
-  }
 
   function handleLoadDemo() {
     loadDemoCrateDirect('spotify');
@@ -65,7 +57,7 @@
     e.preventDefault();
     const currentInput = selectedMode === 'lastfm' ? lastfmUsername : spotifyInput;
     if (!currentInput.trim()) return;
-    fetchAndBuildCrate(currentInput.trim(), selectedMode, forceRefresh);
+    fetchAndBuildCrate(currentInput.trim(), selectedMode, false);
   }
 </script>
 
@@ -117,7 +109,7 @@
 
           <div class="mode-card-content">
             <h2 class="mode-big-title">SPOTIFY</h2>
-            <p class="mode-big-desc">Roll tracks from public playlists or direct playlist links.</p>
+            <p class="mode-big-desc">Roll tracks from public playlists on your profile.</p>
           </div>
         </button>
       </div>
@@ -149,7 +141,7 @@
 
       <p class="onboarding-desc">
         {selectedMode === 'spotify'
-          ? 'Enter a public Spotify playlist link or profile to scan tracks and build your crate.'
+          ? 'Enter a public Spotify profile to scan public playlists and build your crate.'
           : 'Enter a public Last.fm profile to scan listening history and build your crate.'}
       </p>
 
@@ -188,17 +180,17 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
                   <path d="M19 12H5M12 19l-7-7 7-7"/>
                 </svg>
-                <span>SWITCH TO PROFILE &amp; FOLLOWED PLAYLISTS</span>
+                <span>SWITCH TO CONNECTED ACCOUNT MODE</span>
               </button>
             </div>
 
-            <label for="inputSpotifyProfile" class="input-label">SPOTIFY PROFILE OR PLAYLIST URL</label>
+            <label for="inputSpotifyProfile" class="input-label">SPOTIFY PROFILE URL</label>
             <div class="input-group">
               <input
                 type="text"
                 id="inputSpotifyProfile"
                 class="input-profile input-profile-spotify"
-                placeholder="https://open.spotify.com/user/... or playlist/..."
+                placeholder="https://open.spotify.com/user/..."
                 autocomplete="off"
                 spellcheck="false"
                 bind:value={spotifyInput}
@@ -209,17 +201,9 @@
                 <div class="btn-spinner {$isBuildingCrate ? '' : 'hidden'}" id="btnSpinner"></div>
               </button>
             </div>
-            <span class="proxy-hint">Tip: Enter a Spotify profile URL or public playlist URL.</span>
+            <span class="proxy-hint">Tip: Enter a public Spotify profile link or username.</span>
 
             <div class="options-bar">
-              <label class="checkbox-label" for="chkForceRefresh">
-                <input
-                  type="checkbox"
-                  id="chkForceRefresh"
-                  bind:checked={forceRefresh}
-                />
-                <span>Force live re-scrape (bypass local cache)</span>
-              </label>
               <button
                 type="button"
                 class="btn-demo-link"
@@ -228,33 +212,6 @@
               >
                 Load Offline Demo Crate
               </button>
-            </div>
-
-            <div class="proxy-config-bar">
-              <button
-                type="button"
-                class="btn-proxy-toggle"
-                on:click={() => { showProxyConfig = !showProxyConfig; }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                </svg>
-                <span>{showProxyConfig ? 'Hide Cloudflare Worker Proxy Settings' : 'Cloudflare Worker Proxy (GitHub Pages)'}</span>
-              </button>
-
-              {#if showProxyConfig}
-                <div class="proxy-input-group">
-                  <input
-                    type="url"
-                    class="input-proxy-url"
-                    placeholder="e.g. https://spotify-proxy.your-name.workers.dev"
-                    bind:value={workerProxyUrl}
-                    on:input={handleSaveProxy}
-                  />
-                  <span class="proxy-hint">Required on static GitHub Pages to proxy Spotify embed data. Local backend (server.py) works without proxy.</span>
-                </div>
-              {/if}
             </div>
           {/if}
         {/if}
