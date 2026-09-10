@@ -80,17 +80,38 @@ def scrape_user_profile(user_id):
     return info
 
 def scrape_playlists_urllib(user_id):
-    """Scrape playlist IDs from profile using urllib."""
+    """Scrape playlist IDs and names from profile using initialState and HTML regex."""
     url = f"https://open.spotify.com/user/{user_id}"
-    req = urllib.request.Request(url, headers=HEADERS)
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
     playlists = {}
     try:
         with urllib.request.urlopen(req, timeout=12) as resp:
             html = resp.read().decode("utf-8", errors="ignore")
-        # Extract playlist links
+
+        # 1. First attempt: Parse initialState JSON embedded by Spotify
+        m_state = re.search(r'<script id="initialState"[^>]*>(.*?)</script>', html, re.DOTALL)
+        if m_state:
+            import base64
+            try:
+                decoded = base64.b64decode(m_state.group(1).strip()).decode("utf-8", errors="ignore")
+                state_data = json.loads(decoded)
+                items = state_data.get("entities", {}).get("items", {})
+                for k, entity in items.items():
+                    if entity.get("__typename") == "User":
+                        for p_item in entity.get("publicPlaylistsV2", {}).get("items", []):
+                            p_data = p_item.get("data", {})
+                            uri = p_data.get("uri") or p_item.get("_uri", "")
+                            p_id = uri.split(":")[-1] if uri else ""
+                            if len(p_id) == 22:
+                                playlists[p_id] = p_data.get("name") or "Playlist"
+            except Exception:
+                pass
+
+        # 2. Fallback / supplementary regex for direct href links
         matches = re.findall(r'href=[\'"]/playlist/([a-zA-Z0-9]{22})[\'"]', html)
         for pid in set(matches):
-            playlists[pid] = "Playlist"
+            if pid not in playlists:
+                playlists[pid] = "Playlist"
     except Exception:
         pass
     return playlists

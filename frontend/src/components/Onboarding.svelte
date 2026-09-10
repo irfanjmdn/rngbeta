@@ -13,7 +13,7 @@
   // Screen state: 'select' (First thing: 2 big buttons) | 'entry' (Input card)
   let currentStep = 'select';
   let selectedMode = 'lastfm'; // 'lastfm' | 'spotify'
-  let spotifySubView = 'connect'; // 'connect' | 'direct'
+  let spotifySubView = 'direct'; // 'direct' | 'connect'
 
   onMount(() => {
     if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
@@ -192,13 +192,13 @@
               </button>
             </div>
 
-            <label for="inputSpotifyProfile" class="input-label">SPOTIFY PLAYLIST URL</label>
+            <label for="inputSpotifyProfile" class="input-label">SPOTIFY PROFILE OR PLAYLIST URL</label>
             <div class="input-group">
               <input
                 type="text"
                 id="inputSpotifyProfile"
                 class="input-profile input-profile-spotify"
-                placeholder="https://open.spotify.com/playlist/..."
+                placeholder="https://open.spotify.com/user/... or playlist/..."
                 autocomplete="off"
                 spellcheck="false"
                 bind:value={spotifyInput}
@@ -209,7 +209,7 @@
                 <div class="btn-spinner {$isBuildingCrate ? '' : 'hidden'}" id="btnSpinner"></div>
               </button>
             </div>
-            <span class="proxy-hint">Tip: Paste any public playlist link (Share &rarr; Copy link to playlist).</span>
+            <span class="proxy-hint">Tip: Enter a Spotify profile URL or public playlist URL.</span>
 
             <div class="options-bar">
               <label class="checkbox-label" for="chkForceRefresh">
