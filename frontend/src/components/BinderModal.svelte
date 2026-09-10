@@ -349,27 +349,7 @@
                 }
               }}
             >
-              <!-- Cartridge Header Stripe -->
-              <div class="binder-tile-header">
-                <span class="binder-tile-tier-badge" style="color: {card.rarityColor || 'var(--text-muted)'};">
-                  {card.rarityName || card.rarityTier}
-                </span>
-                <div class="binder-tile-header-actions">
-                  <span class="binder-tile-count" title="Copies owned">x{$gameInventory[card.id] || 1}</span>
-                  <button
-                    class="binder-card-star-btn {isStarred ? 'is-starred' : ''}"
-                    data-star-id={card.id}
-                    type="button"
-                    aria-label="Star track"
-                    title={isStarred ? 'Starred track' : 'Star this track'}
-                    on:click|stopPropagation={() => toggleStar(card.id)}
-                  >
-                    ★
-                  </button>
-                </div>
-              </div>
-
-              <!-- Cartridge Sleeve Artwork -->
+              <!-- Artwork Window with Floating Badges -->
               <div class="binder-tile-art-wrap">
                 <img
                   class="binder-tile-art {isPlaceholderCover(card) ? 'is-placeholder-art' : ''}"
@@ -377,6 +357,29 @@
                   alt={card.title}
                   loading="lazy"
                 />
+
+                <!-- Floating Rarity Badge & Count -->
+                <div class="binder-tile-badge-group">
+                  <span class="binder-tile-tier-badge" style="color: {card.rarityColor || 'var(--text-muted)'};">
+                    {card.rarityName || card.rarityTier}
+                  </span>
+                  {#if ($gameInventory[card.id] || 1) > 1}
+                    <span class="binder-tile-count" title="Copies owned">x{$gameInventory[card.id]}</span>
+                  {/if}
+                </div>
+
+                <!-- Floating Star Button -->
+                <button
+                  class="binder-card-star-btn {isStarred ? 'is-starred' : ''}"
+                  data-star-id={card.id}
+                  type="button"
+                  aria-label="Star track"
+                  title={isStarred ? 'Starred track' : 'Star this track'}
+                  on:click|stopPropagation={() => toggleStar(card.id)}
+                >
+                  ★
+                </button>
+
                 {#if card.playlist_cover_url}
                   <img
                     class="binder-tile-playlist-badge"
@@ -386,6 +389,7 @@
                     loading="lazy"
                   />
                 {/if}
+
                 {#if card.preview_url}
                   <div
                     class="binder-tile-play-hint"
@@ -406,35 +410,33 @@
                 {/if}
               </div>
 
-              <!-- Cartridge Metadata Plate -->
+              <!-- Metadata Row with Direct Link -->
               <div class="binder-tile-meta">
-                <div class="binder-tile-title" title={card.title}>{card.title}</div>
+                <div class="binder-tile-title-row">
+                  <span class="binder-tile-title" title={card.title}>{card.title}</span>
+                  {#if appUri}
+                    <a
+                      class="btn-binder-spotify"
+                      href={appUri}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open on Last.fm"
+                      aria-label="Open track on Last.fm"
+                      on:click|stopPropagation={(e) => {
+                        e.preventDefault();
+                        window.open(appUri, '_blank', 'noopener,noreferrer');
+                      }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                          d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm1.8 12.5c-.8.8-1.8 1.2-3 1.2-1.3 0-2.4-.4-3.2-1.2-.8-.8-1.2-1.9-1.2-3.3 0-1.4.4-2.5 1.2-3.3.8-.8 1.9-1.2 3.2-1.2 1.2 0 2.2.4 3 1.2.7.8 1.1 1.8 1.2 3.1H13.1c-.1-.7-.3-1.2-.7-1.6-.4-.4-.9-.6-1.5-.6-.7 0-1.2.2-1.6.7-.4.5-.6 1.1-.6 2 0 .8.2 1.5.6 2 .4.5 1 .7 1.6.7.6 0 1.1-.2 1.5-.6.4-.4.6-1 .7-1.6h1.9c-.1 1.2-.5 2.2-1.2 2.9zm3.5-3.6h1.5v1.4h-1.5v3.1c0 .5.1.8.3.9.2.1.4.2.7.2.3 0 .5-.1.7-.2l.3 1.3c-.4.2-.8.3-1.3.3-.6 0-1.1-.2-1.4-.5-.3-.3-.4-.8-.4-1.4v-3.7H16v-1.4h1.3V8.8h1.4v2.1h.6z"
+                        />
+                      </svg>
+                    </a>
+                  {/if}
+                </div>
                 <div class="binder-tile-artist" title={card.artist}>{card.artist}</div>
               </div>
-
-              <!-- Cartridge Footer Action -->
-              {#if appUri}
-                <div class="binder-tile-footer">
-                  <a
-                    class="btn-binder-spotify"
-                    href={appUri}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Open on Last.fm"
-                    on:click|stopPropagation={(e) => {
-                      e.preventDefault();
-                      window.open(appUri, '_blank', 'noopener,noreferrer');
-                    }}
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                      <path
-                        d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm1.8 12.5c-.8.8-1.8 1.2-3 1.2-1.3 0-2.4-.4-3.2-1.2-.8-.8-1.2-1.9-1.2-3.3 0-1.4.4-2.5 1.2-3.3.8-.8 1.9-1.2 3.2-1.2 1.2 0 2.2.4 3 1.2.7.8 1.1 1.8 1.2 3.1H13.1c-.1-.7-.3-1.2-.7-1.6-.4-.4-.9-.6-1.5-.6-.7 0-1.2.2-1.6.7-.4.5-.6 1.1-.6 2 0 .8.2 1.5.6 2 .4.5 1 .7 1.6.7.6 0 1.1-.2 1.5-.6.4-.4.6-1 .7-1.6h1.9c-.1 1.2-.5 2.2-1.2 2.9zm3.5-3.6h1.5v1.4h-1.5v3.1c0 .5.1.8.3.9.2.1.4.2.7.2.3 0 .5-.1.7-.2l.3 1.3c-.4.2-.8.3-1.3.3-.6 0-1.1-.2-1.4-.5-.3-.3-.4-.8-.4-1.4v-3.7H16v-1.4h1.3V8.8h1.4v2.1h.6z"
-                      />
-                    </svg>
-                    <span>Last.fm</span>
-                  </a>
-                </div>
-              {/if}
             </div>
           {/each}
         {/if}
