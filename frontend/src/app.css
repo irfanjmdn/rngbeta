@@ -894,18 +894,74 @@ body {
   box-shadow: 0 0 14px rgba(244, 63, 94, 0.4);
   transform-origin: center;
   transform: scale(calc(1 + var(--hold-progress, 0) * 0.16));
-  transition: transform 0.18s cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 0.18s ease;
+  transition: width 0.22s cubic-bezier(0.22, 0.61, 0.36, 1), transform 0.18s cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 0.18s ease, background-color 0.18s ease;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
+  overflow: hidden;
 }
 
 .hud-logo-mark:hover {
-  box-shadow: 0 0 18px rgba(244, 63, 94, 0.65);
+  width: 82px;
+  box-shadow: 0 0 20px rgba(244, 63, 94, 0.75);
 }
 
 .hud-logo-mark.is-holding {
   box-shadow: 0 0 calc(14px + var(--hold-progress, 0) * 22px) rgba(244, 63, 94, calc(0.4 + var(--hold-progress, 0) * 0.5));
+}
+
+.logout-default-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+}
+
+.hud-logo-mark:hover .logout-default-icon {
+  opacity: 0;
+  transform: scale(0.65);
+}
+
+.logout-hover-text {
+  position: absolute;
+  font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #000000;
+  white-space: nowrap;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
+  user-select: none;
+}
+
+.hud-logo-mark:hover .logout-hover-text {
+  opacity: 1;
+  transform: scale(1);
+  animation: boil-text 0.35s steps(1) infinite;
+}
+
+@keyframes boil-text {
+  0% {
+    filter: url('#boil-filter-1');
+  }
+  25% {
+    filter: url('#boil-filter-2');
+  }
+  50% {
+    filter: url('#boil-filter-3');
+  }
+  75% {
+    filter: url('#boil-filter-4');
+  }
+  100% {
+    filter: url('#boil-filter-1');
+  }
 }
 
 .logout-lightning-icon {

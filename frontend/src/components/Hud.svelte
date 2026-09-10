@@ -377,10 +377,35 @@
         on:keydown={handleKeyDown}
         on:keyup={handleKeyUp}
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" class="logout-lightning-icon">
-          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-        </svg>
+        <span class="logout-default-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" class="logout-lightning-icon">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+          </svg>
+        </span>
+        <span class="logout-hover-text" aria-hidden="true">LOG OUT?</span>
       </button>
+
+      <!-- SVG Filter for hand-drawn turbulence/boiling effect -->
+      <svg class="logout-filter-svg" width="0" height="0" style="position: absolute; pointer-events: none;">
+        <defs>
+          <filter id="boil-filter-1">
+            <feTurbulence type="fractalNoise" baseFrequency="0.04 0.08" numOctaves="2" result="noise" seed="1" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.5" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+          <filter id="boil-filter-2">
+            <feTurbulence type="fractalNoise" baseFrequency="0.05 0.09" numOctaves="2" result="noise" seed="15" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+          <filter id="boil-filter-3">
+            <feTurbulence type="fractalNoise" baseFrequency="0.04 0.07" numOctaves="2" result="noise" seed="30" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+          <filter id="boil-filter-4">
+            <feTurbulence type="fractalNoise" baseFrequency="0.06 0.08" numOctaves="2" result="noise" seed="45" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.8" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+        </defs>
+      </svg>
       <div class="hud-avatar-wrap">
         {#if $userAvatarUrl}
           <img class="hud-avatar-img" src={$userAvatarUrl} alt="User profile" />
