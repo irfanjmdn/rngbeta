@@ -33,7 +33,6 @@
     fadeInMusic,
     getAudioContext,
     playLogoutSquareSound,
-    playRollNudgeSound,
   } from './lib/audio.js';
   import { fetchTrackPreview } from './lib/artCache.js';
 
@@ -495,7 +494,6 @@
 
   function triggerRollNudge() {
     if ($isSpinning || !$isCrateReady || !isArenaBgLooping) return;
-    playRollNudgeSound();
     isRollNudgeActive.set(true);
     if (nudgePulseClearTimer) clearTimeout(nudgePulseClearTimer);
     nudgePulseClearTimer = setTimeout(() => {
