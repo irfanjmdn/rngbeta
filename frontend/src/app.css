@@ -901,10 +901,14 @@ body {
   overflow: hidden;
 }
 
-.hud-logo-mark:hover,
+.hud-logo-mark:hover {
+  width: 78px;
+  box-shadow: 0 0 20px rgba(244, 63, 94, 0.75);
+}
+
 .hud-logo-mark.is-holding,
 .hud-logo-mark.is-released {
-  width: 104px;
+  width: 88px;
   box-shadow: 0 0 20px rgba(244, 63, 94, 0.75);
 }
 
@@ -931,10 +935,10 @@ body {
 
 .logout-hover-text {
   position: absolute;
-  font-family: 'Caveat', 'Kalam', 'Comic Sans MS', cursive, sans-serif;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
+  font-family: var(--font-rarity);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
   color: #000000;
   white-space: nowrap;
   opacity: 0;
@@ -945,19 +949,34 @@ body {
   line-height: 1;
 }
 
-.logout-hover-text.is-holding-text {
+.logout-hover-text.is-holding-text,
+.logout-hover-text.is-released-text {
   font-family: system-ui, -apple-system, 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif;
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 400;
   letter-spacing: 0;
 }
 
-.hud-logo-mark:hover .logout-hover-text,
-.hud-logo-mark.is-holding .logout-hover-text,
-.hud-logo-mark.is-released .logout-hover-text {
+.hud-logo-mark:hover .logout-hover-text {
   opacity: 1;
   transform: scale(1);
   animation: boil-text 0.35s steps(1) infinite;
+}
+
+/* Higher speed boiling distortion during hold */
+.hud-logo-mark.is-holding .logout-hover-text,
+.logout-hover-text.is-holding-text {
+  opacity: 1;
+  transform: scale(1);
+  animation: boil-text 0.14s steps(1) infinite;
+}
+
+/* Lower speed boiling distortion after release */
+.hud-logo-mark.is-released .logout-hover-text,
+.logout-hover-text.is-released-text {
+  opacity: 1;
+  transform: scale(1);
+  animation: boil-text 0.65s steps(1) infinite;
 }
 
 @keyframes boil-text {

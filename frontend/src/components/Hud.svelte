@@ -431,7 +431,8 @@
         </span>
         <span
           class="logout-hover-text"
-          class:is-holding-text={isHolding || showReleaseKaomoji}
+          class:is-holding-text={isHolding}
+          class:is-released-text={showReleaseKaomoji}
           class:is-active-override={showReleaseKaomoji}
           aria-hidden="true"
         >
