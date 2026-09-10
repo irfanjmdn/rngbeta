@@ -853,6 +853,34 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        if self.path.startswith("/api/deezer"):
+            query_str = self.path.split("?", 1)[1] if "?" in self.path else ""
+            params = urllib.parse.parse_qs(query_str)
+            q = params.get("q", [""])[0]
+            if not q:
+                self.send_response(400)
+                self.end_headers()
+                return
+            deezer_url = f"https://api.deezer.com/search?q={urllib.parse.quote(q)}&limit=5"
+            try:
+                req = urllib.request.Request(deezer_url, headers=HEADERS)
+                with urllib.request.urlopen(req, timeout=5) as res:
+                    data = res.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception as e:
+                body = json.dumps({"error": str(e), "data": []}).encode("utf-8")
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+            return
+
         super().do_GET()
 
     def do_OPTIONS(self):

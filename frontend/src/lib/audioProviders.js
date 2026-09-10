@@ -117,7 +117,9 @@ export async function fetchDeezerTrack(artist, title, album = '') {
     const query = `${cleanArtist} ${cleanTitle}`.trim();
     if (!query) return null;
 
-    const url = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=5`;
+    const isBrowser = typeof window !== 'undefined';
+    const baseUrl = isBrowser ? '/api/deezer' : 'https://api.deezer.com/search';
+    const url = `${baseUrl}?q=${encodeURIComponent(query)}&limit=5`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
     const res = await fetch(url, { signal: controller.signal });
