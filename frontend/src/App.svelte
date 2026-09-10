@@ -543,8 +543,8 @@
 
   <!-- Start-up Empty Page Loading Splash with Nippo Font and Boiling Distortion -->
   {#if isInitialLoading}
-    <div class="startup-splash-screen" class:is-hiding={isHidingSplash} aria-label="Loading track rng">
-      <div class="startup-splash-brand">track rng</div>
+    <div class="startup-splash-screen" class:is-hiding={isHidingSplash} aria-label="Loading Track RNG">
+      <div class="startup-splash-brand">Track RNG</div>
     </div>
   {/if}
 

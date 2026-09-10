@@ -20,7 +20,7 @@ async def verify_branding_and_logout():
         print(f"Navigating to {BASE_URL}...", flush=True)
         await page.goto(BASE_URL)
 
-        # 1. Verify Start-up Splash Screen with bold track rng font and fade-out shrink animation
+        # 1. Verify Start-up Splash Screen with bold Track RNG font and fade-out shrink animation
         splash = await page.wait_for_selector(".startup-splash-screen", timeout=2000)
         assert splash is not None, "Splash screen not displayed on start!"
         splash_text = await page.text_content(".startup-splash-brand")
@@ -49,9 +49,9 @@ async def verify_branding_and_logout():
         await page.wait_for_selector("#gameArenaScreen:not(.hidden)", timeout=10000)
         print("PASS: Game arena loaded.", flush=True)
 
-        # 3. Verify HUD Branding is 'track rng'
+        # 3. Verify HUD Branding is 'Track RNG'
         brand_title = await page.text_content(".hud-brand-title")
-        assert "track rng" in brand_title.lower(), f"HUD brand title is not track rng: '{brand_title}'"
+        assert "track rng" in brand_title.lower(), f"HUD brand title is not Track RNG: '{brand_title}'"
         print(f"PASS: HUD brand title correctly displays '{brand_title.strip()}'.", flush=True)
 
         # 4. Test Logout button interaction

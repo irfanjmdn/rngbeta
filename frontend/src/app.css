@@ -1087,7 +1087,6 @@ body {
   letter-spacing: -0.02em;
   color: #FFFFFF;
   line-height: 1.1;
-  text-transform: lowercase;
   user-select: none;
   width: 100%;
 }
@@ -4831,7 +4830,7 @@ a.meta-tag.source-tag:hover strong {
 }
 
 /* ==========================================================================
-   Start-up Splash Screen (Empty Page with Centered Bold track rng)
+   Start-up Splash Screen (Empty Page with Centered Bold Track RNG)
    ========================================================================== */
 
 .startup-splash-screen {
@@ -4861,7 +4860,6 @@ a.meta-tag.source-tag:hover strong {
   font-weight: 700;
   color: #FFFFFF;
   letter-spacing: -0.03em;
-  text-transform: lowercase;
   position: relative;
   animation: boil-splash 0.35s steps(1) infinite;
 }
