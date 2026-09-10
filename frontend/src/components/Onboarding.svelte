@@ -1,26 +1,15 @@
 <script>
-  import { onMount } from 'svelte';
   import {
     debugLogs,
     debugStatus,
     isBuildingCrate,
     isCrateReady,
   } from '../lib/store.js';
-  import { fetchAndBuildCrate, loadDemoCrateDirect } from '../lib/sse.js';
-  import SpotifyConnectView from './SpotifyConnectView.svelte';
+  import { fetchAndBuildCrate } from '../lib/sse.js';
 
   // Screen state: 'select' (First thing: 2 big buttons) | 'entry' (Input card)
   let currentStep = 'select';
   let selectedMode = 'lastfm'; // 'lastfm' | 'spotify'
-  let spotifySubView = 'direct'; // 'direct' | 'connect'
-
-  onMount(() => {
-    if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
-      selectedMode = 'spotify';
-      currentStep = 'entry';
-      spotifySubView = 'connect';
-    }
-  });
 
   let wasCrateReady = false;
   $: {
@@ -33,9 +22,11 @@
   let lastfmUsername = 'rj';
   let spotifyInput = '';
   let terminalEl;
+  let isConsoleOpen = false;
 
-  function handleLoadDemo() {
-    loadDemoCrateDirect('spotify');
+  // Auto-open console when logs appear or error occurs, but never auto-close it
+  $: if ($debugLogs.length > 0 || $debugStatus === 'error' || $debugStatus === 'running') {
+    isConsoleOpen = true;
   }
 
   $: if ($debugLogs && terminalEl) {
@@ -165,64 +156,33 @@
             </button>
           </div>
         {:else}
-          {#if spotifySubView === 'connect'}
-            <SpotifyConnectView
-              onDirectPlaylistMode={() => { spotifySubView = 'direct'; }}
-              onLoadDemo={handleLoadDemo}
+          <label for="inputSpotifyProfile" class="input-label">SPOTIFY PROFILE URL</label>
+          <div class="input-group">
+            <input
+              type="text"
+              id="inputSpotifyProfile"
+              class="input-profile input-profile-spotify"
+              placeholder="https://open.spotify.com/user/..."
+              autocomplete="off"
+              spellcheck="false"
+              bind:value={spotifyInput}
+              required
             />
-          {:else}
-            <div class="form-nav-bar">
-              <button
-                type="button"
-                class="btn-back-mode"
-                on:click={() => { spotifySubView = 'connect'; }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-                  <path d="M19 12H5M12 19l-7-7 7-7"/>
-                </svg>
-                <span>SWITCH TO CONNECTED ACCOUNT MODE</span>
-              </button>
-            </div>
-
-            <label for="inputSpotifyProfile" class="input-label">SPOTIFY PROFILE URL</label>
-            <div class="input-group">
-              <input
-                type="text"
-                id="inputSpotifyProfile"
-                class="input-profile input-profile-spotify"
-                placeholder="https://open.spotify.com/user/..."
-                autocomplete="off"
-                spellcheck="false"
-                bind:value={spotifyInput}
-                required
-              />
-              <button type="submit" class="btn-build-crate btn-build-spotify" id="btnBuildCrate" disabled={$isBuildingCrate}>
-                <span id="btnBuildText">{$isBuildingCrate ? 'Building Crate...' : 'Fetch & Build Crate'}</span>
-                <div class="btn-spinner {$isBuildingCrate ? '' : 'hidden'}" id="btnSpinner"></div>
-              </button>
-            </div>
-            <span class="proxy-hint">Tip: Enter a public Spotify profile link or username.</span>
-
-            <div class="options-bar">
-              <button
-                type="button"
-                class="btn-demo-link"
-                on:click={handleLoadDemo}
-                disabled={$isBuildingCrate}
-              >
-                Load Offline Demo Crate
-              </button>
-            </div>
-          {/if}
+            <button type="submit" class="btn-build-crate btn-build-spotify" id="btnBuildCrate" disabled={$isBuildingCrate}>
+              <span id="btnBuildText">{$isBuildingCrate ? 'Building Crate...' : 'Fetch & Build Crate'}</span>
+              <div class="btn-spinner {$isBuildingCrate ? '' : 'hidden'}" id="btnSpinner"></div>
+            </button>
+          </div>
+          <span class="proxy-hint">Tip: Enter a public Spotify profile link or username.</span>
         {/if}
       </form>
 
-      <!-- Collapsible Live Progress & Debug Dropdown -->
-      <details class="debug-dropdown" id="debugDropdown" open={$debugStatus === 'error'}>
+      <!-- Collapsible Live Progress & Console Dropdown -->
+      <details class="debug-dropdown" id="debugDropdown" bind:open={isConsoleOpen}>
         <summary class="debug-summary">
           <div class="debug-summary-left">
             <span class="debug-status-dot {$debugStatus}" id="debugStatusDot"></span>
-            <span class="debug-summary-title">Live Scraper Progress &amp; Debug Console</span>
+            <span class="debug-summary-title">Console</span>
           </div>
           <span class="debug-badge" id="debugBadge">{$debugLogs.length} events</span>
         </summary>
