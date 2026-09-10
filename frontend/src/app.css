@@ -824,6 +824,8 @@ body {
   backdrop-filter: blur(16px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   transition: border-color 0.18s ease;
+  min-width: 250px;
+  box-sizing: border-box;
 }
 
 .hud-brand-pill:hover {
@@ -1069,10 +1071,14 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-width: 0;
+  min-width: 155px;
+  flex: 1;
 }
 
 .hud-brand-title {
+  position: relative;
+  height: 18px;
+  overflow: hidden;
   font-family: var(--font-brand);
   font-size: 15px;
   font-weight: 700;
@@ -1080,11 +1086,22 @@ body {
   color: #FFFFFF;
   line-height: 1.1;
   text-transform: lowercase;
-  display: flex;
+  user-select: none;
+  width: 100%;
+}
+
+.hud-brand-text-slide {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  user-select: none;
-  transition: transform 0.2s ease;
+  white-space: nowrap;
+}
+
+.hud-brand-default-text {
+  display: inline-block;
+  line-height: 1.1;
 }
 
 .hud-beta-badge {
