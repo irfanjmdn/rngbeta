@@ -67,12 +67,17 @@
 
 /* Accessible Focus Visible Outlines */
 button:focus-visible,
-input:focus-visible,
 select:focus-visible,
 [role="slider"]:focus-visible,
 summary:focus-visible {
   outline: 2px solid var(--brand-green) !important;
   outline-offset: 2px !important;
+}
+
+input:focus-visible,
+input:focus {
+  outline: 1px solid #FFFFFF !important;
+  outline-offset: 0 !important;
 }
 
 /* Reduced Motion Support */
@@ -454,17 +459,17 @@ body {
 
 .input-profile:focus {
   outline: none;
-  border-color: var(--brand-green);
+  border-color: #FFFFFF;
 }
 
 .input-profile-lastfm:focus {
-  border-color: #E11D48;
-  box-shadow: 0 0 0 1px #E11D48;
+  border-color: #FFFFFF;
+  box-shadow: 0 0 0 1px #FFFFFF;
 }
 
 .input-profile-spotify:focus {
-  border-color: #10B981;
-  box-shadow: 0 0 0 1px #10B981;
+  border-color: #FFFFFF;
+  box-shadow: 0 0 0 1px #FFFFFF;
 }
 
 .btn-build-crate {
@@ -3765,7 +3770,7 @@ a.meta-tag.source-tag:hover strong {
 
 .binder-search-input:focus {
   outline: none;
-  border-color: var(--brand-green);
+  border-color: #FFFFFF;
   background: #161D2B;
 }
 
