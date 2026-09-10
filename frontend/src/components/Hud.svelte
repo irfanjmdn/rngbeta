@@ -78,6 +78,22 @@
 
   let showSquares = false;
   let squaresFilled = 0;
+
+  // Kaomojis displayed during hold
+  const KAOMOJIS = [
+    '(￣～￣;)',
+    '(・ヘ・?)',
+    '⊂(・﹏・⊂)',
+    '(╥﹏╥)',
+    '(╬ Ò﹏Ó)',
+    '(>﹏<)',
+    '(⊙﹏⊙)',
+    '(｡•́︿•̀｡)',
+    '(ᗒᗩᗕ)',
+    '(´；ω；`)'
+  ];
+  let activeKaomoji = KAOMOJIS[0];
+  let kaomojiInterval = null;
   let cancelTimers = [];
 
   function clearCancelTimers() {
@@ -157,6 +173,11 @@
     holdProgress = 0;
     showSquares = false;
     squaresFilled = 0;
+    activeKaomoji = KAOMOJIS[Math.floor(Math.random() * KAOMOJIS.length)];
+    if (kaomojiInterval) clearInterval(kaomojiInterval);
+    kaomojiInterval = setInterval(() => {
+      activeKaomoji = KAOMOJIS[Math.floor(Math.random() * KAOMOJIS.length)];
+    }, 140);
     computeCircleOrigin();
     rumbleAudioController = startLogoutRumble();
     runHoldLoop();
@@ -200,6 +221,10 @@
       isHolding = false;
       holdCompleted = true;
       holdProgress = 1;
+      if (kaomojiInterval) {
+        clearInterval(kaomojiInterval);
+        kaomojiInterval = null;
+      }
       if (holdAnimFrame) {
         cancelAnimationFrame(holdAnimFrame);
         holdAnimFrame = null;
@@ -226,6 +251,10 @@
   function cancelHold() {
     if (!isHolding) return;
     isHolding = false;
+    if (kaomojiInterval) {
+      clearInterval(kaomojiInterval);
+      kaomojiInterval = null;
+    }
     shrinkStartProgress = holdProgress;
     shrinkStartTime = performance.now();
     if (holdAnimFrame) {
@@ -382,7 +411,9 @@
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
           </svg>
         </span>
-        <span class="logout-hover-text" aria-hidden="true">LOG OUT?</span>
+        <span class="logout-hover-text" class:is-holding-text={isHolding} aria-hidden="true">
+          {isHolding ? activeKaomoji : 'LOG OUT?'}
+        </span>
       </button>
 
       <!-- SVG Filter for hand-drawn turbulence/boiling effect -->

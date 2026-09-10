@@ -901,8 +901,9 @@ body {
   overflow: hidden;
 }
 
-.hud-logo-mark:hover {
-  width: 82px;
+.hud-logo-mark:hover,
+.hud-logo-mark.is-holding {
+  width: 96px;
   box-shadow: 0 0 20px rgba(244, 63, 94, 0.75);
 }
 
@@ -920,7 +921,8 @@ body {
   pointer-events: none;
 }
 
-.hud-logo-mark:hover .logout-default-icon {
+.hud-logo-mark:hover .logout-default-icon,
+.hud-logo-mark.is-holding .logout-default-icon {
   opacity: 0;
   transform: scale(0.65);
 }
@@ -928,9 +930,9 @@ body {
 .logout-hover-text {
   position: absolute;
   font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.05em;
   color: #000000;
   white-space: nowrap;
   opacity: 0;
@@ -940,7 +942,13 @@ body {
   user-select: none;
 }
 
-.hud-logo-mark:hover .logout-hover-text {
+.logout-hover-text.is-holding-text {
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+}
+
+.hud-logo-mark:hover .logout-hover-text,
+.hud-logo-mark.is-holding .logout-hover-text {
   opacity: 1;
   transform: scale(1);
   animation: boil-text 0.35s steps(1) infinite;
