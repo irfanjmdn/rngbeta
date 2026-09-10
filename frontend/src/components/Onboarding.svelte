@@ -4,6 +4,9 @@
     debugStatus,
     isBuildingCrate,
     isCrateReady,
+    recentProfiles,
+    removeRecentProfile,
+    clearRecentProfiles,
   } from '../lib/store.js';
   import { fetchAndBuildCrate } from '../lib/sse.js';
 
@@ -47,8 +50,59 @@
     setTimeout(() => inputEl?.focus(), 40);
   }
 
+  let activeLoadingProfileKey = null;
+
+  $: if ($isCrateReady || !$isBuildingCrate) {
+    activeLoadingProfileKey = null;
+  }
+
+  // Auto-open console and switch to entry view if an error occurs while building
+  $: if ($debugStatus === 'error') {
+    activeLoadingProfileKey = null;
+    currentStep = 'entry';
+    isConsoleOpen = true;
+  }
+
   function goBackToSelect() {
     currentStep = 'select';
+  }
+
+  function handleSelectRecent(profile) {
+    if (!profile || $isBuildingCrate) return;
+
+    selectedMode = profile.mode;
+    const targetInput = (profile.fetchTarget || profile.input || profile.rawUserId || (profile.mode === 'lastfm' ? profile.userId : '') || '').trim();
+    
+    // If a legacy Spotify entry only had display name, prompt user to enter URL
+    if (!targetInput) {
+      if (profile.mode === 'lastfm') {
+        lastfmUsername = profile.userId || '';
+      } else {
+        spotifyInput = '';
+      }
+      currentStep = 'entry';
+      setTimeout(() => inputEl?.focus(), 40);
+      return;
+    }
+
+    if (profile.mode === 'lastfm') {
+      lastfmUsername = targetInput;
+    } else {
+      spotifyInput = targetInput;
+    }
+
+    activeLoadingProfileKey = `${profile.mode}:${profile.fetchTarget || profile.userId}`;
+    fetchAndBuildCrate(targetInput, profile.mode, false);
+  }
+
+  function handleRemoveRecent(e, profile) {
+    e.stopPropagation();
+    removeRecentProfile(profile.userId, profile.mode);
+  }
+
+  function handleClearRecent(e) {
+    e.stopPropagation();
+    clearRecentProfiles();
   }
 
   function handleSubmit(e) {
@@ -111,6 +165,88 @@
           </div>
         </button>
       </div>
+
+      <!-- Previously Loaded Profiles (Distilled & Usable) -->
+      {#if $recentProfiles && $recentProfiles.length > 0}
+        <section class="recent-profiles-section" aria-label="Previously Loaded Profiles">
+          <div class="recent-profiles-header">
+            <span class="recent-profiles-title">RECENT CRATES</span>
+            <button
+              type="button"
+              class="btn-clear-recent"
+              on:click={handleClearRecent}
+              aria-label="Clear all previously loaded profiles"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div class="recent-profiles-grid" role="list">
+            {#each $recentProfiles as profile (profile.mode + ':' + (profile.fetchTarget || profile.userId))}
+              {@const profileKey = `${profile.mode}:${profile.fetchTarget || profile.userId}`}
+              {@const isThisLoading = activeLoadingProfileKey === profileKey && $isBuildingCrate}
+              <div
+                class="recent-profile-card {isThisLoading ? 'is-loading' : ''} {$isBuildingCrate && !isThisLoading ? 'is-disabled' : ''}"
+                role="button"
+                tabindex="0"
+                on:click={() => handleSelectRecent(profile)}
+                on:keydown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleSelectRecent(profile);
+                  }
+                }}
+                aria-label="Load {profile.displayName || profile.userId} on {profile.mode === 'lastfm' ? 'Last.fm' : 'Spotify'}"
+                aria-busy={isThisLoading}
+              >
+                <!-- Platform / Avatar Icon -->
+                <div class="recent-platform-icon platform-{profile.mode}">
+                  {#if isThisLoading}
+                    <div class="recent-spinner" aria-label="Loading"></div>
+                  {:else if profile.avatarUrl}
+                    <img
+                      class="recent-avatar-img"
+                      src={profile.avatarUrl}
+                      alt=""
+                      loading="lazy"
+                    />
+                  {:else if profile.mode === 'lastfm'}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M10.584 17.21l-.88-2.392s-1.43 1.594-3.573 1.594c-1.897 0-3.244-1.649-3.244-4.288 0-3.382 1.704-4.591 3.381-4.591 2.42 0 3.189 1.567 3.849 3.574l.88 2.749c.88 2.666 2.529 4.81 7.285 4.81 3.409 0 5.718-1.044 5.718-3.793 0-2.227-1.265-3.381-3.63-3.931l-1.758-.385c-1.21-.275-1.567-.77-1.567-1.595 0-.934.742-1.484 1.952-1.484 1.32 0 2.034.495 2.144 1.677l2.749-.33c-.22-2.474-1.924-3.492-4.729-3.492-2.474 0-4.893.935-4.893 3.932 0 1.87.907 3.051 3.189 3.601l1.87.44c1.402.33 1.869.907 1.869 1.704 0 1.017-.99 1.43-2.86 1.43-2.776 0-3.93-1.457-4.59-3.464l-.907-2.75c-1.155-3.573-2.997-4.893-6.653-4.893C2.144 5.333 0 7.89 0 12.233c0 4.18 2.144 6.434 5.993 6.434 3.106 0 4.591-1.457 4.591-1.457z"/>
+                    </svg>
+                  {:else}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.502 17.31c-.218.358-.68.472-1.038.254-2.846-1.738-6.427-2.13-10.648-1.167-.406.094-.813-.16-.906-.566-.094-.406.16-.813.566-.906 4.628-1.057 8.583-.615 11.77 1.332.358.218.472.68.256 1.053zm1.47-3.26c-.274.444-.86.588-1.304.314-3.259-2.003-8.228-2.583-12.083-1.413-.497.15-1.028-.135-1.178-.632-.15-.497.135-1.028.632-1.178 4.412-1.34 9.897-.692 13.62 1.599.444.274.588.86.314 1.31zm.126-3.393c-3.908-2.321-10.354-2.535-14.093-1.398-.598.182-1.233-.162-1.415-.76-.182-.598.162-1.233.76-1.415 4.301-1.306 11.418-1.054 15.908 1.611.538.319.715 1.02.396 1.558-.319.538-1.02.715-1.558.396z"/>
+                    </svg>
+                  {/if}
+                </div>
+
+                <!-- Username / Display Name -->
+                <span class="recent-profile-name">{profile.displayName || profile.userId}</span>
+
+                <!-- Status / Track Count -->
+                {#if isThisLoading}
+                  <span class="recent-loading-text">LOADING...</span>
+                {:else if profile.tracksCount > 0}
+                  <span class="recent-profile-count">{profile.tracksCount} tracks</span>
+                {/if}
+
+                <!-- Remove Button -->
+                {#if !isThisLoading}
+                  <button
+                    type="button"
+                    class="btn-remove-recent"
+                    aria-label="Remove {profile.displayName || profile.userId}"
+                    on:click={(e) => handleRemoveRecent(e, profile)}
+                  >
+                    ×
+                  </button>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        </section>
+      {/if}
     </div>
   </main>
 

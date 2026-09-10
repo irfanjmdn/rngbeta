@@ -162,3 +162,91 @@ export function toggleStar(trackId) {
 export function appendLog(message, level = 'info', time = '') {
   debugLogs.update((logs) => [...logs, { message, level, time }]);
 }
+
+function loadRecentProfilesFromStorage() {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem('crate_recent_profiles');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // Sanitize entries to ensure fetchTarget exists
+    return parsed.map((p) => {
+      const fetchTarget = (p.input || p.fetchTarget || (p.mode === 'lastfm' ? p.userId : '') || '').trim();
+      return {
+        ...p,
+        fetchTarget: fetchTarget || p.userId,
+        displayName: p.displayName || p.userId,
+      };
+    });
+  } catch (e) {
+    return [];
+  }
+}
+
+export const recentProfiles = writable(loadRecentProfilesFromStorage());
+
+export function saveRecentProfile(profile) {
+  if (!profile || (!profile.userId && !profile.fetchTarget)) return;
+  const target = (profile.fetchTarget || profile.input || profile.rawUserId || profile.userId || '').trim();
+  const display = (profile.displayName || profile.userId || target).trim();
+
+  recentProfiles.update((list) => {
+    const filtered = list.filter(
+      (p) => !(
+        ((p.fetchTarget && p.fetchTarget.toLowerCase() === target.toLowerCase()) ||
+         (p.userId && p.userId.toLowerCase() === display.toLowerCase())) &&
+        p.mode === profile.mode
+      )
+    );
+    const updated = [
+      {
+        userId: display,
+        displayName: display,
+        fetchTarget: target,
+        mode: profile.mode,
+        input: target,
+        avatarUrl: profile.avatarUrl || null,
+        tracksCount: profile.tracksCount || 0,
+        playlistsCount: profile.playlistsCount || 0,
+        lastLoaded: Date.now(),
+      },
+      ...filtered,
+    ].slice(0, 6);
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('crate_recent_profiles', JSON.stringify(updated));
+      }
+    } catch (e) {}
+    return updated;
+  });
+}
+
+export function removeRecentProfile(identifier, mode) {
+  recentProfiles.update((list) => {
+    const cleanId = (identifier || '').toLowerCase();
+    const updated = list.filter(
+      (p) => !(
+        ((p.fetchTarget && p.fetchTarget.toLowerCase() === cleanId) ||
+         (p.userId && p.userId.toLowerCase() === cleanId)) &&
+        p.mode === mode
+      )
+    );
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('crate_recent_profiles', JSON.stringify(updated));
+      }
+    } catch (e) {}
+    return updated;
+  });
+}
+
+export function clearRecentProfiles() {
+  recentProfiles.set([]);
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('crate_recent_profiles');
+    }
+  } catch (e) {}
+}
+

@@ -106,16 +106,11 @@
 
   // Kaomojis displayed during hold (random single pick)
   const HOLD_KAOMOJIS = [
-    '(￣～￣;)',
-    '(・ヘ・?)',
-    '⊂(・﹏・⊂)',
     '(╥﹏╥)',
     '(╬ Ò﹏Ó)',
     '(>﹏<)',
     '(⊙﹏⊙)',
-    '(｡•́︿•̀｡)',
-    '(ᗒᗩᗕ)',
-    '(´；ω；`)'
+    '(｡•́︿•̀｡)'
   ];
 
   // Kaomojis displayed after release (random single pick)
@@ -142,8 +137,6 @@
     ? 'holding'
     : showReleaseKaomoji
     ? 'released'
-    : isLogoutHovered
-    ? 'logout'
     : 'default';
 
   function clearSquarePipTimers() {
@@ -507,8 +500,10 @@
         on:keyup={handleKeyUp}
       >
         <span class="logout-default-icon">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" class="logout-lightning-icon">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+          <!-- Geometric Hardware Power / Exit Icon -->
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square" stroke-linejoin="miter" class="logout-lightning-icon" aria-hidden="true">
+            <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+            <line x1="12" y1="2" x2="12" y2="12" />
           </svg>
         </span>
       </button>
@@ -559,8 +554,6 @@
                 <span class="hud-brand-kaomoji">{currentHoldKaomoji}</span>
               {:else if brandDisplayState === 'released'}
                 <span class="hud-brand-kaomoji">{currentReleaseKaomoji}</span>
-              {:else if brandDisplayState === 'logout'}
-                <span class="hud-brand-logout-text">LOG OUT?</span>
               {:else}
                 <span class="hud-brand-default-text">Track RNG</span>
                 <span class="hud-beta-badge">BETA</span>

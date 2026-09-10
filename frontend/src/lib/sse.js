@@ -16,6 +16,7 @@ import {
   starredTrackIds,
   gameRolls,
   userAvatarUrl,
+  saveRecentProfile,
 } from './store.js';
 import { getAudioContext } from './audio.js';
 import { loadLastfmCrateClient } from './modes/lastfmEngine.js';
@@ -25,7 +26,7 @@ import { loadSpotifyCrateClient, loadStaticDemoCrate } from './modes/spotifyEngi
  * Shared SSE event dispatcher factory.
  * Scopes user data and state initialization to the selected mode.
  */
-export function createSseHandler(mode) {
+export function createSseHandler(mode, inputStr = '') {
   return function handleSseEvent(ev) {
     if (ev.type === 'log') {
       appendLog(ev.message, ev.level, ev.time);
@@ -57,6 +58,17 @@ export function createSseHandler(mode) {
       gameRolls.set(0);
 
       loadUserData(ev.userId, mode);
+      saveRecentProfile({
+        userId: ev.userId,
+        displayName: ev.userId,
+        rawUserId: ev.rawUserId || inputStr || ev.userId,
+        fetchTarget: inputStr || ev.rawUserId || ev.userId,
+        mode: mode,
+        input: inputStr || ev.rawUserId || ev.userId,
+        avatarUrl: ev.avatarUrl || null,
+        tracksCount: ev.tracks?.length || 0,
+        playlistsCount: ev.playlistsCount || 0,
+      });
       isCrateReady.set(true);
     }
   };
@@ -75,7 +87,7 @@ export async function fetchAndBuildCrate(inputStr, mode = 'lastfm', forceRefresh
   activeMode.set(mode);
 
   const cleanInput = (inputStr || '').trim();
-  const onEvent = createSseHandler(mode);
+  const onEvent = createSseHandler(mode, cleanInput);
 
   if (mode === 'lastfm') {
     let lastfmUser = cleanInput;
@@ -97,6 +109,6 @@ export async function loadDemoCrateDirect(mode = 'spotify') {
   isBuildingCrate.set(true);
   debugStatus.set('active');
   activeMode.set(mode);
-  const onEvent = createSseHandler(mode);
+  const onEvent = createSseHandler(mode, 'demo');
   await loadStaticDemoCrate(onEvent);
 }
