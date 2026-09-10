@@ -108,6 +108,7 @@
   let currentHoldKaomoji = HOLD_KAOMOJIS[0];
   let currentReleaseKaomoji = '';
   let showReleaseKaomoji = false;
+  let isLogoutHovered = false;
   let cancelTimers = [];
 
   function clearCancelTimers() {
@@ -259,6 +260,7 @@
   }
 
   function handlePointerLeave() {
+    isLogoutHovered = false;
     if (isHolding) {
       cancelHold();
     }
@@ -418,11 +420,12 @@
         class:is-holding={isHolding}
         class:is-released={showReleaseKaomoji}
         bind:this={logoutBtnEl}
+        on:pointerenter={() => (isLogoutHovered = true)}
         on:pointerdown={handleHoldStart}
         on:pointerup={handleHoldEnd}
         on:pointerleave={handlePointerLeave}
         on:pointercancel={handlePointerLeave}
-        on:blur={() => (showReleaseKaomoji = false)}
+        on:blur={handlePointerLeave}
         on:keydown={handleKeyDown}
         on:keyup={handleKeyUp}
       >
@@ -441,7 +444,7 @@
             {currentHoldKaomoji}
           {:else if showReleaseKaomoji}
             {currentReleaseKaomoji}
-          {:else}
+          {:else if isLogoutHovered}
             LOG OUT?
           {/if}
         </span>
@@ -482,7 +485,7 @@
       </div>
       <div class="hud-brand-titles">
         <div class="hud-brand-title">
-          TRACK CRATE RNG
+          trackrolling
           <span class="hud-beta-badge">BETA</span>
         </div>
         <div class="hud-brand-sub" id="hudAccountSub">

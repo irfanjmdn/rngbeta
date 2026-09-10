@@ -60,7 +60,8 @@ function processPlaylistEntity(entity) {
     const key = `${title.toLowerCase()}||${artist.toLowerCase()}`;
 
     const audioPreview = t.audioPreview;
-    const previewUrl = t.preview_url || (typeof audioPreview === 'object' ? audioPreview?.url : '') || '';
+    // Prefer empty preview_url so the multi-tier Apple/iTunes 30s resolver resolves full previews
+    const previewUrl = '';
     const spotifyId = (t.uri || '').split(':').pop() || '';
     const spotifyUrl = spotifyId ? `https://open.spotify.com/track/${spotifyId}` : '';
 
@@ -171,7 +172,8 @@ function compileMultiPlaylistEntities(userProfile, playlistEntities) {
 
       const key = `${title.toLowerCase()}||${artist.toLowerCase()}`;
       const audioPreview = t.audioPreview;
-      const previewUrl = t.preview_url || (typeof audioPreview === 'object' ? audioPreview?.url : '') || '';
+      // Prefer empty preview_url so the multi-tier Apple/iTunes 30s resolver resolves full previews
+      const previewUrl = '';
       const spotifyId = (t.uri || '').split(':').pop() || '';
       const spotifyUrl = spotifyId ? `https://open.spotify.com/track/${spotifyId}` : '';
 

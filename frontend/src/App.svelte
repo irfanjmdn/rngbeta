@@ -33,6 +33,9 @@
     ? sessionStorage.getItem('desktopNoticeAgreed') === '1'
     : false;
 
+  let isInitialLoading = true;
+  let isHidingSplash = false;
+
   function handleAgreeNotice() {
     playLogoutSquareSound(1);
     hasAgreedToDesktopNotice = true;
@@ -469,6 +472,18 @@
   });
 
   onMount(() => {
+    const splashTimer = setTimeout(async () => {
+      try {
+        if (typeof document !== 'undefined' && document.fonts) {
+          await document.fonts.ready;
+        }
+      } catch {}
+      isHidingSplash = true;
+      setTimeout(() => {
+        isInitialLoading = false;
+      }, 550);
+    }, 750);
+
     const unlockAudio = () => {
       const ctx = getAudioContext();
       if (ctx && ctx.state === 'suspended') {
@@ -495,6 +510,7 @@
     window.addEventListener('keydown', handleKeydown);
 
     return () => {
+      clearTimeout(splashTimer);
       window.removeEventListener('pointerdown', unlockAudio);
       window.removeEventListener('keydown', unlockAudio);
       window.removeEventListener('keydown', handleKeydown);
@@ -503,6 +519,35 @@
 </script>
 
 <div class="app-root">
+  <!-- SVG Filter for hand-drawn turbulence/boiling effect -->
+  <svg class="splash-filter-svg" width="0" height="0" style="position: absolute; pointer-events: none;">
+    <defs>
+      <filter id="splash-boil-filter-1">
+        <feTurbulence type="fractalNoise" baseFrequency="0.04 0.08" numOctaves="2" result="noise" seed="1" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <filter id="splash-boil-filter-2">
+        <feTurbulence type="fractalNoise" baseFrequency="0.05 0.09" numOctaves="2" result="noise" seed="15" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="3.5" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <filter id="splash-boil-filter-3">
+        <feTurbulence type="fractalNoise" baseFrequency="0.04 0.07" numOctaves="2" result="noise" seed="30" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.8" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <filter id="splash-boil-filter-4">
+        <feTurbulence type="fractalNoise" baseFrequency="0.06 0.08" numOctaves="2" result="noise" seed="45" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="3.2" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </defs>
+  </svg>
+
+  <!-- Start-up Empty Page Loading Splash with Nippo Font and Boiling Distortion -->
+  {#if isInitialLoading}
+    <div class="startup-splash-screen" class:is-hiding={isHidingSplash} aria-label="Loading trackrolling">
+      <div class="startup-splash-brand">trackrolling</div>
+    </div>
+  {/if}
+
   <!-- 1. Onboarding Screen -->
   <div class={$isCrateReady ? 'hidden' : ''}>
     <Onboarding />
@@ -574,10 +619,10 @@
       <Reel bind:this={reelComponent} onRollComplete={handleRollComplete} />
 
       <WinnerSpotlight
-        onToggleAudio={toggleArenaAudio}
-        onSeekAudio={seekArenaAudio}
-        onWinnerArtLoaded={(url) => reelComponent?.updateWinnerArt(url)}
-      />
+          onToggleAudio={toggleArenaAudio}
+          onSeekAudio={seekArenaAudio}
+          onWinnerArtLoaded={(url) => reelComponent?.updateWinnerArt(url)}
+        />
 
       <Deck onRoll={triggerRoll} />
     </main>
