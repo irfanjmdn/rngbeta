@@ -79,8 +79,8 @@
   let showSquares = false;
   let squaresFilled = 0;
 
-  // Kaomojis displayed during hold
-  const KAOMOJIS = [
+  // Kaomojis displayed during hold (random single pick)
+  const HOLD_KAOMOJIS = [
     '(￣～￣;)',
     '(・ヘ・?)',
     '⊂(・﹏・⊂)',
@@ -92,8 +92,23 @@
     '(ᗒᗩᗕ)',
     '(´；ω；`)'
   ];
-  let activeKaomoji = KAOMOJIS[0];
-  let kaomojiInterval = null;
+
+  // Kaomojis displayed after release (random single pick)
+  const RELEASE_KAOMOJIS = [
+    '(˶ᵔ ᵕ ᵔ˶)♡',
+    '(∩˃o˂∩)♡',
+    '(｡･ω･｡)',
+    '♡＼(￣▽￣)／♡',
+    '(*¯ ³¯*)♡',
+    '＼(≧▽≦)／',
+    '(≧◠◡◠≦)✧',
+    '(=^･ω･^=)'
+  ];
+
+  let currentHoldKaomoji = HOLD_KAOMOJIS[0];
+  let currentReleaseKaomoji = '';
+  let showReleaseKaomoji = false;
+  let releaseTimer = null;
   let cancelTimers = [];
 
   function clearCancelTimers() {
@@ -173,11 +188,12 @@
     holdProgress = 0;
     showSquares = false;
     squaresFilled = 0;
-    activeKaomoji = KAOMOJIS[Math.floor(Math.random() * KAOMOJIS.length)];
-    if (kaomojiInterval) clearInterval(kaomojiInterval);
-    kaomojiInterval = setInterval(() => {
-      activeKaomoji = KAOMOJIS[Math.floor(Math.random() * KAOMOJIS.length)];
-    }, 140);
+    showReleaseKaomoji = false;
+    if (releaseTimer) clearTimeout(releaseTimer);
+
+    // Pick exactly one random hold kaomoji
+    currentHoldKaomoji = HOLD_KAOMOJIS[Math.floor(Math.random() * HOLD_KAOMOJIS.length)];
+
     computeCircleOrigin();
     rumbleAudioController = startLogoutRumble();
     runHoldLoop();
@@ -221,10 +237,6 @@
       isHolding = false;
       holdCompleted = true;
       holdProgress = 1;
-      if (kaomojiInterval) {
-        clearInterval(kaomojiInterval);
-        kaomojiInterval = null;
-      }
       if (holdAnimFrame) {
         cancelAnimationFrame(holdAnimFrame);
         holdAnimFrame = null;
@@ -251,10 +263,15 @@
   function cancelHold() {
     if (!isHolding) return;
     isHolding = false;
-    if (kaomojiInterval) {
-      clearInterval(kaomojiInterval);
-      kaomojiInterval = null;
-    }
+
+    // Trigger single random release kaomoji
+    currentReleaseKaomoji = RELEASE_KAOMOJIS[Math.floor(Math.random() * RELEASE_KAOMOJIS.length)];
+    showReleaseKaomoji = true;
+    if (releaseTimer) clearTimeout(releaseTimer);
+    releaseTimer = setTimeout(() => {
+      showReleaseKaomoji = false;
+    }, 1800);
+
     shrinkStartProgress = holdProgress;
     shrinkStartTime = performance.now();
     if (holdAnimFrame) {
@@ -398,6 +415,7 @@
         aria-label="Hold to Switch Profile"
         style="--hold-progress: {holdProgress};"
         class:is-holding={isHolding}
+        class:is-released={showReleaseKaomoji}
         bind:this={logoutBtnEl}
         on:pointerdown={handleHoldStart}
         on:pointerup={handleHoldEnd}
@@ -411,8 +429,19 @@
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
           </svg>
         </span>
-        <span class="logout-hover-text" class:is-holding-text={isHolding} aria-hidden="true">
-          {isHolding ? activeKaomoji : 'LOG OUT?'}
+        <span
+          class="logout-hover-text"
+          class:is-holding-text={isHolding || showReleaseKaomoji}
+          class:is-active-override={showReleaseKaomoji}
+          aria-hidden="true"
+        >
+          {#if isHolding}
+            {currentHoldKaomoji}
+          {:else if showReleaseKaomoji}
+            {currentReleaseKaomoji}
+          {:else}
+            LOG OUT?
+          {/if}
         </span>
       </button>
 
