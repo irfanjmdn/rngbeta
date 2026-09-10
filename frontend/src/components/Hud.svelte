@@ -188,7 +188,6 @@
     showSquares = false;
     squaresFilled = 0;
     showReleaseKaomoji = false;
-    if (releaseTimer) clearTimeout(releaseTimer);
 
     // Pick exactly one random hold kaomoji
     currentHoldKaomoji = HOLD_KAOMOJIS[Math.floor(Math.random() * HOLD_KAOMOJIS.length)];
