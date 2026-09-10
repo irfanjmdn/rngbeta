@@ -3842,69 +3842,71 @@ a.meta-tag.source-tag:hover strong {
 
 .binder-grid-full {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
   padding: 2px;
 }
 
-/* Collectible Vinyl Sleeve Tile */
+/* Collectible Cartridge Sleeve Tile */
 .binder-tile {
-  background: #0C1018;
+  background: #0E131F;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
-  padding: 10px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
   position: relative;
-  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s, background-color 0.15s;
+  transition: transform 0.12s ease-out, border-color 0.12s ease-out, background-color 0.12s ease-out;
   cursor: pointer;
   box-shadow: none;
+  overflow: hidden;
+  user-select: none;
 }
 
 .binder-tile:hover {
   transform: translateY(-2px);
-  background: #141A26;
+  background: #141B2B;
   border-color: rgba(255, 255, 255, 0.22);
 }
 
+/* Rarity Accent Band */
 .binder-tile.tier-mythic {
-  border-top: 3px solid #F43F5E;
+  border-top: 2px solid #F43F5E;
 }
 .binder-tile.tier-mythic:hover {
   border-color: #F43F5E;
 }
 
 .binder-tile.tier-legendary {
-  border-top: 3px solid #F59E0B;
+  border-top: 2px solid #F59E0B;
 }
 .binder-tile.tier-legendary:hover {
   border-color: #F59E0B;
 }
 
 .binder-tile.tier-epic {
-  border-top: 3px solid #A855F7;
+  border-top: 2px solid #A855F7;
 }
 .binder-tile.tier-epic:hover {
   border-color: #A855F7;
 }
 
 .binder-tile.tier-rare {
-  border-top: 3px solid #3B82F6;
+  border-top: 2px solid #3B82F6;
 }
 .binder-tile.tier-rare:hover {
   border-color: #3B82F6;
 }
 
 .binder-tile.tier-uncommon {
-  border-top: 3px solid #10B981;
+  border-top: 2px solid #10B981;
 }
 .binder-tile.tier-uncommon:hover {
   border-color: #10B981;
 }
 
 .binder-tile.tier-common {
-  border-top: 3px solid #64748B;
+  border-top: 2px solid #64748B;
 }
 .binder-tile.tier-common:hover {
   border-color: #94A3B8;
@@ -3912,7 +3914,7 @@ a.meta-tag.source-tag:hover strong {
 
 .binder-tile.is-playing-card,
 .binder-tile.is-selected-card {
-  background: #161D2B;
+  background: #151D2D;
   outline: 1px solid var(--tier-color, #10B981);
   outline-offset: -1px;
 }
@@ -3953,78 +3955,59 @@ a.meta-tag.source-tag:hover strong {
   outline-color: #94A3B8;
 }
 
-.binder-tile.is-playing-card .binder-tile-play-hint,
-.binder-tile.is-selected-card .binder-tile-play-hint {
-  opacity: 1;
-  background: rgba(0, 0, 0, 0.5);
+/* Cartridge Sleeve Top Header */
+.binder-tile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  min-height: 28px;
 }
 
-.binder-tile-art-wrap {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1/1;
-  margin-bottom: 8px;
-  border-radius: 0;
-  overflow: hidden;
+.binder-tile-tier-badge {
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
 }
 
-.binder-tile-art {
-  width: 100%;
-  height: 100%;
-  border-radius: 0;
-  object-fit: cover;
-  background: #161D2B;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.binder-tile-playlist-badge {
-  position: absolute;
-  bottom: 4px;
-  right: 4px;
-  width: 20px;
-  height: 20px;
-  border-radius: 0;
-  border: 1px solid #06080D;
-  object-fit: cover;
-  z-index: 10;
-  background: #06080D;
-  pointer-events: none;
+.binder-tile-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .binder-tile-count {
-  position: absolute;
-  top: 4px;
-  left: 4px;
   background: #06080D;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0;
-  color: #FFFFFF;
+  color: var(--text-muted);
   font-family: var(--font-display);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.04em;
-  padding: 2px 5px;
-  z-index: 10;
+  padding: 1px 4px;
   line-height: 1;
 }
 
 .binder-card-star-btn {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   border-radius: 0;
   background: #06080D;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   color: #546274;
-  font-size: 14px;
+  font-size: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 12;
   transition: all 0.12s ease-out;
+  padding: 0;
 }
 
 .binder-card-star-btn:hover {
@@ -4039,22 +4022,85 @@ a.meta-tag.source-tag:hover strong {
   background: rgba(245, 158, 11, 0.18);
 }
 
+/* Cartridge Sleeve Artwork Window */
+.binder-tile-art-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1/1;
+  overflow: hidden;
+  background: #06080D;
+}
+
+.binder-tile-art {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.2s ease-out;
+}
+
+.binder-tile:hover .binder-tile-art {
+  transform: scale(1.02);
+}
+
+.binder-tile-playlist-badge {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  object-fit: cover;
+  z-index: 5;
+  background: #06080D;
+  pointer-events: none;
+}
+
+/* Play Disc Overlay */
 .binder-tile-play-hint {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 0;
+  background: rgba(6, 8, 13, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #FFFFFF;
   opacity: 0;
   transition: opacity 0.12s ease-out;
   z-index: 6;
 }
 
-.binder-tile:hover .binder-tile-play-hint {
+.binder-tile:hover .binder-tile-play-hint,
+.binder-tile.is-playing-card .binder-tile-play-hint,
+.binder-tile.is-selected-card .binder-tile-play-hint {
   opacity: 1;
+}
+
+.binder-tile-play-disc {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #06080D;
+  border: 1.5px solid var(--brand-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  transition: transform 0.12s ease-out, background 0.12s ease-out;
+}
+
+.binder-tile:hover .binder-tile-play-disc {
+  transform: scale(1.08);
+}
+
+/* Metadata Plate */
+.binder-tile-meta {
+  padding: 8px 10px 4px 10px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .binder-tile-title {
@@ -4067,8 +4113,8 @@ a.meta-tag.source-tag:hover strong {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-align: center;
-  margin-bottom: 2px;
+  text-align: left;
+  line-height: 1.3;
 }
 
 .binder-tile-artist {
@@ -4080,27 +4126,34 @@ a.meta-tag.source-tag:hover strong {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-align: center;
-  margin-bottom: 8px;
+  text-align: left;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+/* Cartridge Sleeve Footer */
+.binder-tile-footer {
+  padding: 4px 8px 8px 8px;
+  margin-top: auto;
 }
 
 .btn-binder-spotify {
-  height: 28px;
+  height: 24px;
   width: 100%;
-  background: #161D2B;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-main);
+  background: #141A26;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
   border-radius: 0;
   font-family: var(--font-body);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   cursor: pointer;
   transition: background 0.12s ease-out, border-color 0.12s ease-out, color 0.12s ease-out;
 }
