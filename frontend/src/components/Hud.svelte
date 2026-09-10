@@ -122,13 +122,17 @@
     ? 'logout'
     : 'default';
 
+  function clearSquarePipTimers() {
+    cancelTimers.forEach((t) => clearTimeout(t));
+    cancelTimers = [];
+  }
+
   function clearCancelTimers() {
     if (hoverTimer) {
       clearTimeout(hoverTimer);
       hoverTimer = null;
     }
-    cancelTimers.forEach((t) => clearTimeout(t));
-    cancelTimers = [];
+    clearSquarePipTimers();
     if (releaseTimer) {
       clearTimeout(releaseTimer);
       releaseTimer = null;
@@ -324,7 +328,7 @@
     // If any squares filled, animate fast reverse disappearance one by one
     if (squaresFilled > 0) {
       const currentFilled = squaresFilled;
-      clearCancelTimers();
+      clearSquarePipTimers();
 
       for (let i = currentFilled; i >= 1; i--) {
         const delay = (currentFilled - i) * 45;
