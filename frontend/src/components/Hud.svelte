@@ -536,7 +536,7 @@
               {:else if brandDisplayState === 'logout'}
                 <span class="hud-brand-logout-text">LOG OUT?</span>
               {:else}
-                <span class="hud-brand-default-text">trackrolling</span>
+                <span class="hud-brand-default-text">track rng</span>
                 <span class="hud-beta-badge">BETA</span>
               {/if}
             </div>
