@@ -71,9 +71,26 @@
       rollAnimTimer = setTimeout(() => {
         isRollIncrementing = false;
         rollAnimTimer = null;
-      }, 360);
+      }, 420);
     }
     prevRollCount = $gameRolls;
+  }
+
+  // Mastery count increase animation state
+  let prevMasteryCount = $unlockedCount || 0;
+  let isMasteryIncrementing = false;
+  let masteryAnimTimer = null;
+
+  $: if ($unlockedCount !== undefined && $unlockedCount !== null) {
+    if ($unlockedCount > prevMasteryCount) {
+      isMasteryIncrementing = true;
+      if (masteryAnimTimer) clearTimeout(masteryAnimTimer);
+      masteryAnimTimer = setTimeout(() => {
+        isMasteryIncrementing = false;
+        masteryAnimTimer = null;
+      }, 420);
+    }
+    prevMasteryCount = $unlockedCount;
   }
 
   // Hold-to-logout state
@@ -655,7 +672,7 @@
       <div class="monolith-meta-row">
         <div class="monolith-stat-left">
           <div class="monolith-stat-count">
-            <span id="hudMasteryVal">{$unlockedCount}</span>
+            <span id="hudMasteryVal" class="monolith-mastery-val" class:is-incrementing={isMasteryIncrementing}>{$unlockedCount}</span>
             <span class="sep">/</span>
             <span id="hudMasteryTotal">{$rngTracks.length}</span>
           </div>

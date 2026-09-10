@@ -4,6 +4,7 @@
     isSpinning,
     isAutoRolling,
     isAutoSkip,
+    isRollNudgeActive,
     autoRollMode,
     arenaAudioTime,
   } from '../lib/store.js';
@@ -263,7 +264,7 @@
         </svg>
       {/if}
       <button
-        class="btn-big-roll {$isSpinning ? 'is-spinning' : ''} {$isAutoRolling ? 'is-auto-rolling' : ''} {isLaunching ? 'is-launching' : ''}"
+        class="btn-big-roll {$isSpinning ? 'is-spinning' : ''} {$isAutoRolling ? 'is-auto-rolling' : ''} {isLaunching ? 'is-launching' : ''} {$isRollNudgeActive ? 'is-nudged' : ''}"
         id="btnBigRoll"
         type="button"
         on:click={handleRollClick}

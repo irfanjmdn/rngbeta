@@ -995,3 +995,42 @@ export function playLogoutCancelPipSound(stepIndex = 1) {
     } catch (e) {}
   }
 }
+
+export function playRollNudgeSound() {
+  if (sfxVolume <= 0) return;
+  const played = playSampledSound('seek_tick', { volume: 0.38, playbackRate: 1.4 });
+  if (!played) {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const dest = getAudioDestinationNode() || ctx.destination;
+
+      // Soft dual-tone tactile chime: 780Hz -> 1040Hz
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sine';
+      osc2.type = 'triangle';
+
+      osc1.frequency.setValueAtTime(784, now); // G5
+      osc1.frequency.exponentialRampToValueAtTime(1046.5, now + 0.09); // C6
+      osc2.frequency.setValueAtTime(1175, now); // D6
+      osc2.frequency.exponentialRampToValueAtTime(1568, now + 0.07); // G6
+
+      gain.gain.setValueAtTime(0.14 * sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(dest);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.17);
+      osc2.stop(now + 0.17);
+    } catch (e) {}
+  }
+}
+

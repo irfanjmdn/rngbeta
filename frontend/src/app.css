@@ -1314,6 +1314,19 @@ body {
   font-weight: 800;
   letter-spacing: 0.04em;
   color: #FFFFFF;
+  display: inline-flex;
+  align-items: baseline;
+  overflow: hidden;
+}
+
+.monolith-mastery-val {
+  display: inline-block;
+  line-height: 1;
+  will-change: transform, opacity, color;
+}
+
+.monolith-mastery-val.is-incrementing {
+  animation: odometerScrollUp 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .monolith-stat-count .sep {
@@ -1331,6 +1344,7 @@ body {
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
+  overflow: hidden;
 }
 
 .monolith-rolls-val {
@@ -1341,31 +1355,36 @@ body {
   color: #FFFFFF;
   display: inline-block;
   line-height: 1;
-  transform-origin: center bottom;
-  will-change: transform, color;
+  will-change: transform, opacity, color;
 }
 
 .monolith-rolls-val.is-incrementing {
-  animation: monolith-roll-tick 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: odometerScrollUp 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes monolith-roll-tick {
+@keyframes odometerScrollUp {
   0% {
-    transform: translateY(-4px) scale(1.22);
+    transform: translateY(100%);
+    opacity: 0;
     color: var(--brand-green);
   }
-  45% {
-    transform: translateY(1px) scale(0.96);
+  30% {
+    opacity: 1;
+  }
+  65% {
+    transform: translateY(-12%);
     color: var(--brand-green);
   }
   100% {
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
+    opacity: 1;
     color: #FFFFFF;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .monolith-rolls-val.is-incrementing {
+  .monolith-rolls-val.is-incrementing,
+  .monolith-mastery-val.is-incrementing {
     animation: none;
     color: var(--brand-green);
   }
@@ -3337,6 +3356,46 @@ a.meta-tag.source-tag:hover strong {
   box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
   transition: transform 0.12s cubic-bezier(0.2, 0.9, 0.3, 1.2);
   animation: none;
+}
+
+/* Nudge hint cue on audio repeat / lowpass loop */
+.btn-big-roll.is-nudged {
+  animation: rollBtnNudge 0.85s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+
+@keyframes rollBtnNudge {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5), 0 0 22px rgba(16, 185, 129, 0.28);
+    border-color: rgba(52, 211, 153, 0.6);
+  }
+  25% {
+    transform: scale(1.06) translateY(-2px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6), 0 0 34px rgba(52, 211, 153, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    border-color: #34D399;
+  }
+  50% {
+    transform: scale(0.98) translateY(1px);
+    box-shadow: 0 3px 16px rgba(0, 0, 0, 0.5), 0 0 24px rgba(16, 185, 129, 0.4);
+    border-color: #10B981;
+  }
+  75% {
+    transform: scale(1.02) translateY(-0.5px);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55), 0 0 26px rgba(52, 211, 153, 0.5);
+    border-color: rgba(52, 211, 153, 0.7);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5), 0 0 22px rgba(16, 185, 129, 0.28);
+    border-color: rgba(52, 211, 153, 0.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-big-roll.is-nudged {
+    animation: none;
+    border-color: #34D399;
+  }
 }
 
 /* Rolling state: clean recessed dark finish */

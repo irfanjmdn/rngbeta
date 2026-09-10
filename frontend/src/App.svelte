@@ -15,6 +15,7 @@
     activeModal,
     rngTracks,
     isLoggingOut,
+    isRollNudgeActive,
   } from './lib/store.js';
 
   import Onboarding from './components/Onboarding.svelte';
@@ -26,7 +27,14 @@
   import RatesModal from './components/RatesModal.svelte';
   import SettingsModal from './components/SettingsModal.svelte';
   import CyberGrid from './components/CyberGrid.svelte';
-  import { connectMediaElement, setArenaLowpassFilter, fadeInMusic, getAudioContext, playLogoutSquareSound } from './lib/audio.js';
+  import {
+    connectMediaElement,
+    setArenaLowpassFilter,
+    fadeInMusic,
+    getAudioContext,
+    playLogoutSquareSound,
+    playRollNudgeSound,
+  } from './lib/audio.js';
   import { fetchTrackPreview } from './lib/artCache.js';
 
   let hasAgreedToDesktopNotice = typeof sessionStorage !== 'undefined'
@@ -464,7 +472,54 @@
     }
   }
 
+  // Roll Button Nudge on Lowpass Loop (2s after lowpass/repeat starts, then every 10s)
+  let nudgeInitialTimer = null;
+  let nudgeIntervalTimer = null;
+  let nudgePulseClearTimer = null;
+
+  function clearNudgeTimers() {
+    if (nudgeInitialTimer) {
+      clearTimeout(nudgeInitialTimer);
+      nudgeInitialTimer = null;
+    }
+    if (nudgeIntervalTimer) {
+      clearInterval(nudgeIntervalTimer);
+      nudgeIntervalTimer = null;
+    }
+    if (nudgePulseClearTimer) {
+      clearTimeout(nudgePulseClearTimer);
+      nudgePulseClearTimer = null;
+    }
+    isRollNudgeActive.set(false);
+  }
+
+  function triggerRollNudge() {
+    if ($isSpinning || !$isCrateReady || !isArenaBgLooping) return;
+    playRollNudgeSound();
+    isRollNudgeActive.set(true);
+    if (nudgePulseClearTimer) clearTimeout(nudgePulseClearTimer);
+    nudgePulseClearTimer = setTimeout(() => {
+      isRollNudgeActive.set(false);
+      nudgePulseClearTimer = null;
+    }, 1100);
+  }
+
+  $: if (!isArenaBgLooping || $isSpinning || !$isCrateReady) {
+    clearNudgeTimers();
+  } else if (isArenaBgLooping && !$isSpinning && $isCrateReady && !nudgeInitialTimer && !nudgeIntervalTimer) {
+    // Fire nudge 2s after song repeats / engages lowpass
+    nudgeInitialTimer = setTimeout(() => {
+      nudgeInitialTimer = null;
+      triggerRollNudge();
+      // Then repeat nudge every 10s while still looping in lowpass
+      nudgeIntervalTimer = setInterval(() => {
+        triggerRollNudge();
+      }, 10000);
+    }, 2000);
+  }
+
   onDestroy(() => {
+    clearNudgeTimers();
     if (rafId) {
       cancelAnimationFrame(rafId);
       rafId = null;
