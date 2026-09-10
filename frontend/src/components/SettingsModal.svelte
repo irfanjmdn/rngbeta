@@ -144,7 +144,7 @@
             type="button"
             class="btn-settings-test"
             id="btnTestSfx"
-            title="Preview roll sound effects at current volume"
+            aria-label="Preview roll sound effects at current volume"
             on:click={testSfx}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -157,7 +157,7 @@
             type="button"
             class="btn-settings-test"
             id="btnTestStarSfx"
-            title="Preview star chime at current volume"
+            aria-label="Preview star chime at current volume"
             on:click={testStarChime}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

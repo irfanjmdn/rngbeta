@@ -363,7 +363,6 @@
       role="button"
       tabindex="0"
       aria-label="Play or pause audio preview"
-      title="Click to play or pause audio preview"
       on:click={onToggleAudio}
       on:keydown={handleKeydown}
     >
@@ -453,7 +452,6 @@
             id="btnWinnerStar"
             type="button"
             aria-label="Star track"
-            title="Star this track"
             on:click={handleStarClick}
           >
             <svg
@@ -545,7 +543,6 @@
           class="meta-tag source-tag"
           id="winnerSourceLink"
           href={$activeWinnerCard ? $activeWinnerCard.playlist_uri || $activeWinnerCard.playlist_url || '#' : '#'}
-          title="Open track link"
           style={$activeWinnerCard ? 'pointer-events: auto;' : 'pointer-events: none;'}
         >
           <strong class="winner-source" id="winnerSource">
@@ -561,7 +558,7 @@
           href={$activeWinnerCard.spotify_url || $activeWinnerCard.playlist_url || $activeWinnerCard.uri}
           target="_blank"
           rel="noopener noreferrer"
-          title={$activeWinnerCard.source === 'spotify' ? 'Open track on Spotify' : 'Open track on Last.fm'}
+          aria-label={$activeWinnerCard.source === 'spotify' ? 'Open track on Spotify' : 'Open track on Last.fm'}
           on:click={handleSpotifyClick}
         >
           {#if $activeWinnerCard.source === 'spotify'}

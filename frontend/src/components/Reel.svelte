@@ -172,8 +172,8 @@
       <div class="reel-card-art-wrap">
         <img class="reel-card-art ${isPlaceholder ? 'is-placeholder-art' : ''}" src="${albumCover}" alt="${htmlEscape(card.title)}" loading="lazy" />
       </div>
-      <div class="reel-card-title" title="${htmlEscape(card.title)}">${htmlEscape(card.title)}</div>
-      <div class="reel-card-artist" title="${htmlEscape(card.artist)}">${htmlEscape(card.artist)}</div>
+      <div class="reel-card-title">${htmlEscape(card.title)}</div>
+      <div class="reel-card-artist">${htmlEscape(card.artist)}</div>
       <div class="reel-card-tier-banner" style="background-color: ${card.rarityColor}; color: ${textColor};">${htmlEscape(card.rarityName.toUpperCase())}</div>
     `;
 

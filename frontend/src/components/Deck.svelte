@@ -152,7 +152,6 @@
         type="button"
         aria-label="Auto-Roll continuous spinning"
         aria-pressed={$isAutoRolling ? 'true' : 'false'}
-        title={$isAutoRolling ? 'Auto-Roll: ON (Click to stop)' : 'Auto-Roll (Lock continuous spinning)'}
         on:click={handleAutoRollToggle}
       >
         <svg
@@ -188,7 +187,6 @@
         aria-label="Select auto-roll mode"
         aria-haspopup="menu"
         aria-expanded={isMenuOpen}
-        title="Auto-roll mode options"
         on:click={toggleMenu}
       >
         <svg
@@ -288,7 +286,6 @@
       type="button"
       aria-label="Fast-forward roll animation"
       aria-pressed={$isAutoSkip ? 'true' : 'false'}
-      title={$isAutoSkip ? 'Fast-forward: ON (Click to disable)' : 'Fast-forward (Snap immediately at 0.75s)'}
       on:click={handleAutoSkipToggle}
     >
       <svg

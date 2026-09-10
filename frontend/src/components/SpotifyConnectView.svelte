@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   import { onMount } from "svelte";
   import {
     getAccessToken,
@@ -357,7 +357,7 @@
               </div>
             {/if}
             <div class="picker-meta">
-              <span class="picker-title" title={p.name}>{p.name}</span>
+              <span class="picker-title">{p.name}</span>
               <span class="picker-creator">by {p.owner?.display_name || 'Creator'} &bull; {p.tracks?.total || 0} tracks</span>
             </div>
           </button>

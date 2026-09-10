@@ -140,6 +140,22 @@
       scrubTrackEl.releasePointerCapture(e.pointerId);
     } catch (_) {}
   }
+
+  function handleOpenExternalTrack(e, track) {
+    e.preventDefault();
+    if (!track) return;
+    if (track.source === 'spotify') {
+      const targetUri = track.uri || track.spotify_url;
+      if (targetUri) {
+        window.open(targetUri, '_blank', 'noopener,noreferrer');
+      }
+    } else {
+      const targetUrl = track.source_url || track.spotify_url || track.uri;
+      if (targetUrl) {
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      }
+    }
+  }
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -364,7 +380,7 @@
                     {card.rarityName || card.rarityTier}
                   </span>
                   {#if ($gameInventory[card.id] || 1) > 1}
-                    <span class="binder-tile-count" title="Copies owned">x{$gameInventory[card.id]}</span>
+                    <span class="binder-tile-count">x{$gameInventory[card.id]}</span>
                   {/if}
                 </div>
 
@@ -374,7 +390,6 @@
                   data-star-id={card.id}
                   type="button"
                   aria-label="Star track"
-                  title={isStarred ? 'Starred track' : 'Star this track'}
                   on:click|stopPropagation={() => toggleStar(card.id)}
                 >
                   ★
@@ -385,16 +400,12 @@
                     class="binder-tile-playlist-badge"
                     src={card.playlist_cover_url}
                     alt="Playlist"
-                    title="From playlist: {card.playlist_name}"
                     loading="lazy"
                   />
                 {/if}
 
                 {#if card.preview_url}
-                  <div
-                    class="binder-tile-play-hint"
-                    title={isCardPlaying ? 'Pause preview' : 'Play preview in Binder'}
-                  >
+                  <div class="binder-tile-play-hint">
                     <div class="binder-tile-play-disc" style="border-color: {card.rarityColor || 'var(--brand-green)'};">
                       {#if isCardPlaying}
                         <svg width="14" height="14" viewBox="0 0 24 24" fill={card.rarityColor || 'white'}>
@@ -413,29 +424,33 @@
               <!-- Metadata Row with Direct Link -->
               <div class="binder-tile-meta">
                 <div class="binder-tile-title-row">
-                  <span class="binder-tile-title" title={card.title}>{card.title}</span>
+                  <span class="binder-tile-title">{card.title}</span>
                   {#if appUri}
                     <a
                       class="btn-binder-spotify"
                       href={appUri}
                       target="_blank"
                       rel="noopener noreferrer"
-                      title="Open on Last.fm"
-                      aria-label="Open track on Last.fm"
-                      on:click|stopPropagation={(e) => {
-                        e.preventDefault();
-                        window.open(appUri, '_blank', 'noopener,noreferrer');
-                      }}
+                      aria-label={card.source === 'spotify' ? 'Play in Spotify app' : 'Open track on Last.fm'}
+                      on:click|stopPropagation={(e) => handleOpenExternalTrack(e, card)}
                     >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                        <path
-                          d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm1.8 12.5c-.8.8-1.8 1.2-3 1.2-1.3 0-2.4-.4-3.2-1.2-.8-.8-1.2-1.9-1.2-3.3 0-1.4.4-2.5 1.2-3.3.8-.8 1.9-1.2 3.2-1.2 1.2 0 2.2.4 3 1.2.7.8 1.1 1.8 1.2 3.1H13.1c-.1-.7-.3-1.2-.7-1.6-.4-.4-.9-.6-1.5-.6-.7 0-1.2.2-1.6.7-.4.5-.6 1.1-.6 2 0 .8.2 1.5.6 2 .4.5 1 .7 1.6.7.6 0 1.1-.2 1.5-.6.4-.4.6-1 .7-1.6h1.9c-.1 1.2-.5 2.2-1.2 2.9zm3.5-3.6h1.5v1.4h-1.5v3.1c0 .5.1.8.3.9.2.1.4.2.7.2.3 0 .5-.1.7-.2l.3 1.3c-.4.2-.8.3-1.3.3-.6 0-1.1-.2-1.4-.5-.3-.3-.4-.8-.4-1.4v-3.7H16v-1.4h1.3V8.8h1.4v2.1h.6z"
-                        />
-                      </svg>
+                      {#if card.source === 'spotify'}
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                          <path
+                            d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.502 17.31c-.218.358-.68.472-1.038.254-2.846-1.738-6.427-2.13-10.648-1.167-.406.094-.813-.16-.906-.566-.094-.406.16-.813.566-.906 4.628-1.057 8.583-.615 11.77 1.332.358.218.472.68.256 1.053zm1.47-3.26c-.274.444-.86.588-1.304.314-3.259-2.003-8.228-2.583-12.083-1.413-.497.15-1.028-.135-1.178-.632-.15-.497.135-1.028.632-1.178 4.412-1.34 9.897-.692 13.62 1.599.444.274.588.86.314 1.31zm.126-3.393c-3.908-2.321-10.354-2.535-14.093-1.398-.598.182-1.233-.162-1.415-.76-.182-.598.162-1.233.76-1.415 4.301-1.306 11.418-1.054 15.908 1.611.538.319.715 1.02.396 1.558-.319.538-1.02.715-1.558.396z"
+                          />
+                        </svg>
+                      {:else}
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                          <path
+                            d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm1.8 12.5c-.8.8-1.8 1.2-3 1.2-1.3 0-2.4-.4-3.2-1.2-.8-.8-1.2-1.9-1.2-3.3 0-1.4.4-2.5 1.2-3.3.8-.8 1.9-1.2 3.2-1.2 1.2 0 2.2.4 3 1.2.7.8 1.1 1.8 1.2 3.1H13.1c-.1-.7-.3-1.2-.7-1.6-.4-.4-.9-.6-1.5-.6-.7 0-1.2.2-1.6.7-.4.5-.6 1.1-.6 2 0 .8.2 1.5.6 2 .4.5 1 .7 1.6.7.6 0 1.1-.2 1.5-.6.4-.4.6-1 .7-1.6h1.9c-.1 1.2-.5 2.2-1.2 2.9zm3.5-3.6h1.5v1.4h-1.5v3.1c0 .5.1.8.3.9.2.1.4.2.7.2.3 0 .5-.1.7-.2l.3 1.3c-.4.2-.8.3-1.3.3-.6 0-1.1-.2-1.4-.5-.3-.3-.4-.8-.4-1.4v-3.7H16v-1.4h1.3V8.8h1.4v2.1h.6z"
+                          />
+                        </svg>
+                      {/if}
                     </a>
                   {/if}
                 </div>
-                <div class="binder-tile-artist" title={card.artist}>{card.artist}</div>
+                <div class="binder-tile-artist">{card.artist}</div>
               </div>
             </div>
           {/each}
@@ -539,16 +554,8 @@
                 : ($activeBinderTrack.source_url || $activeBinderTrack.spotify_url || '#')}
               target="_blank"
               rel="noopener noreferrer"
-              title={$activeBinderTrack.source === 'spotify' ? 'Play in Spotify app' : 'Open track on Last.fm'}
-              on:click={(e) => {
-                if ($activeBinderTrack.source !== 'spotify') {
-                  e.preventDefault();
-                  window.open($activeBinderTrack.source_url || $activeBinderTrack.spotify_url || '#', '_blank', 'noopener,noreferrer');
-                } else if ($activeBinderTrack.uri) {
-                  e.preventDefault();
-                  window.location.href = $activeBinderTrack.uri;
-                }
-              }}
+              aria-label={$activeBinderTrack.source === 'spotify' ? 'Play in Spotify app' : 'Open track on Last.fm'}
+              on:click={(e) => handleOpenExternalTrack(e, $activeBinderTrack)}
             >
               {#if $activeBinderTrack.source === 'spotify'}
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
