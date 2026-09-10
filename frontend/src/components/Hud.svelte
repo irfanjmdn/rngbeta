@@ -108,7 +108,6 @@
   let currentHoldKaomoji = HOLD_KAOMOJIS[0];
   let currentReleaseKaomoji = '';
   let showReleaseKaomoji = false;
-  let releaseTimer = null;
   let cancelTimers = [];
 
   function clearCancelTimers() {
@@ -260,6 +259,13 @@
     cancelHold();
   }
 
+  function handlePointerLeave() {
+    if (isHolding) {
+      cancelHold();
+    }
+    showReleaseKaomoji = false;
+  }
+
   function cancelHold() {
     if (!isHolding) return;
     isHolding = false;
@@ -267,10 +273,6 @@
     // Trigger single random release kaomoji
     currentReleaseKaomoji = RELEASE_KAOMOJIS[Math.floor(Math.random() * RELEASE_KAOMOJIS.length)];
     showReleaseKaomoji = true;
-    if (releaseTimer) clearTimeout(releaseTimer);
-    releaseTimer = setTimeout(() => {
-      showReleaseKaomoji = false;
-    }, 400);
 
     shrinkStartProgress = holdProgress;
     shrinkStartTime = performance.now();
@@ -419,8 +421,9 @@
         bind:this={logoutBtnEl}
         on:pointerdown={handleHoldStart}
         on:pointerup={handleHoldEnd}
-        on:pointerleave={handleHoldEnd}
-        on:pointercancel={handleHoldEnd}
+        on:pointerleave={handlePointerLeave}
+        on:pointercancel={handlePointerLeave}
+        on:blur={() => (showReleaseKaomoji = false)}
         on:keydown={handleKeyDown}
         on:keyup={handleKeyUp}
       >
@@ -433,7 +436,6 @@
           class="logout-hover-text"
           class:is-holding-text={isHolding}
           class:is-released-text={showReleaseKaomoji}
-          class:is-active-override={showReleaseKaomoji}
           aria-hidden="true"
         >
           {#if isHolding}

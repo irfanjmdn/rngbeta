@@ -901,14 +901,10 @@ body {
   overflow: hidden;
 }
 
-.hud-logo-mark:hover {
-  width: 78px;
-  box-shadow: 0 0 20px rgba(244, 63, 94, 0.75);
-}
-
+.hud-logo-mark:hover,
 .hud-logo-mark.is-holding,
 .hud-logo-mark.is-released {
-  width: 88px;
+  width: 104px;
   box-shadow: 0 0 20px rgba(244, 63, 94, 0.75);
 }
 
