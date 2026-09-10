@@ -114,6 +114,8 @@
   let releaseTimer = null;
   let cancelTimers = [];
 
+  let previousBrandDisplayState = 'default';
+
   $: brandDisplayState = isHolding
     ? 'holding'
     : showReleaseKaomoji
@@ -121,6 +123,9 @@
     : isLogoutHovered
     ? 'logout'
     : 'default';
+
+  $: shouldAnimateBrandText = !(previousBrandDisplayState === 'released' && brandDisplayState === 'default');
+  $: previousBrandDisplayState = brandDisplayState;
 
   function clearCancelTimers() {
     if (hoverTimer) {
@@ -283,7 +288,7 @@
     hoverTimer = setTimeout(() => {
       isLogoutHovered = true;
       hoverTimer = null;
-    }, 100);
+    }, 200);
   }
 
   function handlePointerLeave() {
@@ -512,8 +517,8 @@
           {#key brandDisplayState}
             <div
               class="hud-brand-text-slide"
-              in:fly={{ y: 18, duration: 160, opacity: 1 }}
-              out:fly={{ y: -18, duration: 140, opacity: 1 }}
+              in:fly={{ y: shouldAnimateBrandText ? 18 : 0, duration: shouldAnimateBrandText ? 160 : 0, opacity: 1 }}
+              out:fly={{ y: shouldAnimateBrandText ? -18 : 0, duration: shouldAnimateBrandText ? 140 : 0, opacity: 1 }}
             >
               {#if brandDisplayState === 'holding'}
                 <span class="hud-brand-kaomoji">{currentHoldKaomoji}</span>
