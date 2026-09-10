@@ -168,7 +168,7 @@
   <div class="binder-dialog-content">
     <div class="binder-modal-header">
       <div class="binder-title-wrap">
-        <h2 class="binder-title">ALBUM CARD BINDER</h2>
+        <h2 class="binder-title">TRACK CATALOGUE</h2>
         <div class="binder-progress-block" id="binderProgressText">
           <div class="binder-progress-stats">
             <span class="binder-progress-count">{$unlockedCount}</span>
@@ -185,7 +185,7 @@
           </div>
         </div>
       </div>
-      <button class="binder-close" id="btnCloseBinderModal" type="button" on:click={closeModal} aria-label="Close binder">
+      <button class="binder-close" id="btnCloseBinderModal" type="button" on:click={closeModal} aria-label="Close catalogue">
         <span class="binder-close-glyph" aria-hidden="true">×</span>
       </button>
     </div>
@@ -197,7 +197,7 @@
         type="button"
         on:click={() => (currentFilter = 'all')}
       >
-        All Cards <span class="cat-chip-count">({tierCounts.all})</span>
+        All Tracks <span class="cat-chip-count">({tierCounts.all})</span>
       </button>
       <button
         class="cat-chip {currentFilter === 'starred' ? 'active' : ''} {tierCounts.starred === 0 ? 'empty-tier' : ''}"
@@ -313,135 +313,161 @@
     </div>
 
     <div class="binder-scroll-area">
-      <div class="binder-grid-full" id="binderGridFull">
-        {#if displayedCards.length === 0}
-          <div class="binder-empty-card">
-            <div class="binder-empty-icon">&#128451;</div>
-            <div class="binder-empty-title">
-              {currentFilter === 'starred'
-                ? 'No starred tracks yet'
-                : (searchQuery ? 'No matching tracks found' : 'No cards unlocked yet')}
-            </div>
-            <div class="binder-empty-text">
-              {currentFilter === 'starred'
-                ? 'Click the star on any card or winner reveal to save your favorites here.'
-                : (searchQuery
-                  ? `No unlocked tracks match "${searchQuery}". Try another search.`
-                  : 'Spin crates in the Arena to discover and unlock tracks for your binder!')}
-            </div>
-            {#if searchQuery}
-              <button
-                class="btn-empty-reset"
-                id="btnEmptyClearSearch"
-                type="button"
-                on:click={() => (searchQuery = '')}
-              >
-                Clear Search
-              </button>
-            {:else}
-              <button class="btn-empty-reset" id="btnEmptyGoArena" type="button" on:click={closeModal}>
-                Spin in Arena
-              </button>
-            {/if}
+      <div class="binder-content-wrap" id="binderGridFull">
+      {#if displayedCards.length === 0}
+        <div class="binder-empty-card">
+          <div class="binder-empty-icon">&#128451;</div>
+          <div class="binder-empty-title">
+            {currentFilter === 'starred'
+              ? 'No starred tracks yet'
+              : (searchQuery ? 'No matching tracks found' : 'No tracks unlocked yet')}
           </div>
-        {:else}
-          {#each displayedCards as card (card.id)}
-            {@const isCardPlaying = $activeBinderTrack?.id === card.id && $isBinderPlaying}
-            {@const isCardSelected = $activeBinderTrack?.id === card.id}
-            {@const isStarred = $starredTrackIds.has(card.id)}
-            {@const appUri = card.uri || card.spotify_url}
-
-            <!-- svelte-ignore a11y-click-events-have-key-events -->
-            <div
-              class="binder-tile tier-{card.rarityTier} {isCardPlaying ? 'is-playing-card' : ''} {isCardSelected ? 'is-selected-card' : ''}"
-              data-card-id={card.id}
-              role="button"
-              tabindex="0"
-              on:click={() => {
-                if ($activeBinderTrack?.id === card.id && card.preview_url) {
-                  onToggleBinderPlay();
-                } else {
-                  onPlayBinderTrack(card);
-                }
-              }}
+          <div class="binder-empty-text">
+            {currentFilter === 'starred'
+              ? 'Click the star on any track row to save your favorites here.'
+              : (searchQuery
+                ? `No unlocked tracks match "${searchQuery}". Try another search.`
+                : 'Spin crates in the Arena to discover and unlock tracks for your catalogue!')}
+          </div>
+          {#if searchQuery}
+            <button
+              class="btn-empty-reset"
+              id="btnEmptyClearSearch"
+              type="button"
+              on:click={() => (searchQuery = '')}
             >
-              <!-- Artwork Window with Floating Badges -->
-              <div class="binder-tile-art-wrap">
-                <img
-                  class="binder-tile-art {isPlaceholderCover(card) ? 'is-placeholder-art' : ''}"
-                  src={card.album_cover_url || card.cover_url || card.playlist_cover_url || ''}
-                  alt={card.title}
-                  loading="lazy"
-                />
+              Clear Search
+            </button>
+          {:else}
+            <button class="btn-empty-reset" id="btnEmptyGoArena" type="button" on:click={closeModal}>
+              Spin in Arena
+            </button>
+          {/if}
+        </div>
+      {:else}
+        <div class="binder-track-table" role="table" aria-label="Unlocked Tracklist">
+          <div class="binder-table-head" role="row">
+            <div class="col-num" role="columnheader">#</div>
+            <div class="col-title" role="columnheader">Title</div>
+            <div class="col-origin" role="columnheader">Playlist / Origin</div>
+            <div class="col-tier" role="columnheader">Rarity</div>
+            <div class="col-count" role="columnheader">Owned</div>
+            <div class="col-actions" role="columnheader"></div>
+          </div>
 
-                <!-- Floating Rarity Badge & Count -->
-                <div class="binder-tile-badge-group">
-                  <span class="binder-tile-tier-badge" style="color: {card.rarityColor || 'var(--text-muted)'};">
-                    {card.rarityName || card.rarityTier}
-                  </span>
-                  {#if ($gameInventory[card.id] || 1) > 1}
-                    <span class="binder-tile-count">x{$gameInventory[card.id]}</span>
+          <div class="binder-table-body" role="rowgroup">
+            {#each displayedCards as card, index (card.id)}
+              {@const isCardPlaying = $activeBinderTrack?.id === card.id && $isBinderPlaying}
+              {@const isCardSelected = $activeBinderTrack?.id === card.id}
+              {@const isStarred = $starredTrackIds.has(card.id)}
+              {@const appUri = card.uri || card.spotify_url}
+
+              <!-- svelte-ignore a11y-click-events-have-key-events -->
+              <div
+                class="binder-track-row tier-{card.rarityTier} {isCardPlaying ? 'is-playing-row' : ''} {isCardSelected ? 'is-selected-row' : ''}"
+                role="row"
+                tabindex="0"
+                on:click={() => {
+                  if ($activeBinderTrack?.id === card.id && card.preview_url) {
+                    onToggleBinderPlay();
+                  } else {
+                    onPlayBinderTrack(card);
+                  }
+                }}
+              >
+                <!-- # Index Number / Play Button Indicator -->
+                <div class="col-num" role="cell">
+                  {#if isCardPlaying}
+                    <div class="table-equalizer-bars" aria-label="Playing">
+                      <span class="eq-bar eq-1"></span>
+                      <span class="eq-bar eq-2"></span>
+                      <span class="eq-bar eq-3"></span>
+                    </div>
+                  {:else}
+                    <span class="row-index-num">{index + 1}</span>
+                    {#if card.preview_url}
+                      <button
+                        class="row-play-btn"
+                        type="button"
+                        aria-label="Play {card.title}"
+                        on:click|stopPropagation={() => onPlayBinderTrack(card)}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      </button>
+                    {/if}
                   {/if}
                 </div>
 
-                <!-- Floating Star Button -->
-                <button
-                  class="binder-card-star-btn {isStarred ? 'is-starred' : ''}"
-                  data-star-id={card.id}
-                  type="button"
-                  aria-label="Star track"
-                  on:click|stopPropagation={() => toggleStar(card.id)}
-                >
-                  ★
-                </button>
-
-                {#if card.playlist_cover_url}
+                <!-- Title & Artist Cluster with Album Cover Thumbnail -->
+                <div class="col-title" role="cell">
                   <img
-                    class="binder-tile-playlist-badge"
-                    src={card.playlist_cover_url}
-                    alt="Playlist"
+                    class="row-album-art {isPlaceholderCover(card) ? 'is-placeholder-art' : ''}"
+                    src={card.album_cover_url || card.cover_url || card.playlist_cover_url || ''}
+                    alt={card.title}
                     loading="lazy"
                   />
-                {/if}
-
-                {#if card.preview_url}
-                  <div class="binder-tile-play-hint">
-                    <div class="binder-tile-play-disc" style="border-color: {card.rarityColor || 'var(--brand-green)'};">
-                      {#if isCardPlaying}
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill={card.rarityColor || 'white'}>
-                          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                        </svg>
-                      {:else}
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                      {/if}
-                    </div>
+                  <div class="row-title-block">
+                    <span class="row-track-title">{card.title}</span>
+                    <span class="row-track-artist">{card.artist}</span>
                   </div>
-                {/if}
-              </div>
+                </div>
 
-              <!-- Metadata Row with Direct Link -->
-              <div class="binder-tile-meta">
-                <div class="binder-tile-title-row">
-                  <span class="binder-tile-title">{card.title}</span>
+                <!-- Origin / Playlist -->
+                <div class="col-origin" role="cell">
+                  <span class="row-playlist-tag" title={card.playlist_name || '-'}>
+                    {card.playlist_name || '-'}
+                  </span>
+                </div>
+
+                <!-- Rarity Tier Pill -->
+                <div class="col-tier" role="cell">
+                  <span
+                    class="row-tier-badge"
+                    style="color: {card.rarityColor || 'var(--text-muted)'}; border-color: {card.rarityColor ? `color-mix(in srgb, ${card.rarityColor} 40%, rgba(255, 255, 255, 0.1))` : 'rgba(255, 255, 255, 0.1)'};"
+                  >
+                    {card.rarityName || card.rarityTier}
+                  </span>
+                </div>
+
+                <!-- Count Badge -->
+                <div class="col-count" role="cell">
+                  {#if ($gameInventory[card.id] || 1) > 1}
+                    <span class="row-owned-badge">x{$gameInventory[card.id]}</span>
+                  {:else}
+                    <span class="row-owned-single">1</span>
+                  {/if}
+                </div>
+
+                <!-- Action Buttons: Star & External Spotify Link -->
+                <div class="col-actions" role="cell">
+                  <button
+                    class="row-star-btn {isStarred ? 'is-starred' : ''}"
+                    type="button"
+                    aria-label="Star track"
+                    on:click|stopPropagation={() => toggleStar(card.id)}
+                  >
+                    ★
+                  </button>
+
                   {#if appUri}
                     <a
-                      class="btn-binder-spotify"
+                      class="row-spotify-link"
                       href={appUri}
                       target="_blank"
                       rel="noopener noreferrer"
-                      aria-label={card.source === 'spotify' ? 'Play in Spotify app' : 'Open track on Last.fm'}
+                      aria-label={card.source === 'spotify' ? 'Open in Spotify' : 'Open in Last.fm'}
                       on:click|stopPropagation={(e) => handleOpenExternalTrack(e, card)}
                     >
                       {#if card.source === 'spotify'}
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                           <path
                             d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.502 17.31c-.218.358-.68.472-1.038.254-2.846-1.738-6.427-2.13-10.648-1.167-.406.094-.813-.16-.906-.566-.094-.406.16-.813.566-.906 4.628-1.057 8.583-.615 11.77 1.332.358.218.472.68.256 1.053zm1.47-3.26c-.274.444-.86.588-1.304.314-3.259-2.003-8.228-2.583-12.083-1.413-.497.15-1.028-.135-1.178-.632-.15-.497.135-1.028.632-1.178 4.412-1.34 9.897-.692 13.62 1.599.444.274.588.86.314 1.31zm.126-3.393c-3.908-2.321-10.354-2.535-14.093-1.398-.598.182-1.233-.162-1.415-.76-.182-.598.162-1.233.76-1.415 4.301-1.306 11.418-1.054 15.908 1.611.538.319.715 1.02.396 1.558-.319.538-1.02.715-1.558.396z"
                           />
                         </svg>
                       {:else}
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                           <path
                             d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm1.8 12.5c-.8.8-1.8 1.2-3 1.2-1.3 0-2.4-.4-3.2-1.2-.8-.8-1.2-1.9-1.2-3.3 0-1.4.4-2.5 1.2-3.3.8-.8 1.9-1.2 3.2-1.2 1.2 0 2.2.4 3 1.2.7.8 1.1 1.8 1.2 3.1H13.1c-.1-.7-.3-1.2-.7-1.6-.4-.4-.9-.6-1.5-.6-.7 0-1.2.2-1.6.7-.4.5-.6 1.1-.6 2 0 .8.2 1.5.6 2 .4.5 1 .7 1.6.7.6 0 1.1-.2 1.5-.6.4-.4.6-1 .7-1.6h1.9c-.1 1.2-.5 2.2-1.2 2.9zm3.5-3.6h1.5v1.4h-1.5v3.1c0 .5.1.8.3.9.2.1.4.2.7.2.3 0 .5-.1.7-.2l.3 1.3c-.4.2-.8.3-1.3.3-.6 0-1.1-.2-1.4-.5-.3-.3-.4-.8-.4-1.4v-3.7H16v-1.4h1.3V8.8h1.4v2.1h.6z"
                           />
@@ -450,11 +476,11 @@
                     </a>
                   {/if}
                 </div>
-                <div class="binder-tile-artist">{card.artist}</div>
               </div>
-            </div>
-          {/each}
-        {/if}
+            {/each}
+          </div>
+        </div>
+      {/if}
       </div>
     </div>
 

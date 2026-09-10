@@ -116,14 +116,16 @@ export function loadUserData(userId, mode = null) {
   } catch (e) {}
 }
 
-export function saveUserData(userId, inv, rolls, times, starred, mode = null) {
+export function saveUserData(userId, inv, rolls, times, starred = null, mode = null) {
   if (!userId) return;
   const currentMode = mode || getStoreMode();
   try {
     localStorage.setItem(`crate_rng_inv_${currentMode}_${userId}`, JSON.stringify(inv));
     localStorage.setItem(`crate_rng_rolls_${currentMode}_${userId}`, rolls.toString());
     localStorage.setItem(`crate_rng_times_${currentMode}_${userId}`, JSON.stringify(times));
-    localStorage.setItem(`crate_starred_${currentMode}_${userId}`, JSON.stringify([...starred]));
+    if (starred !== null && starred !== undefined) {
+      localStorage.setItem(`crate_starred_${currentMode}_${userId}`, JSON.stringify([...starred]));
+    }
   } catch (e) {}
 }
 

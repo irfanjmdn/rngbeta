@@ -4384,6 +4384,315 @@ a.meta-tag.source-tag:hover strong {
   color: #032014;
 }
 
+/* Spotify-Style Playlist Track Table */
+.binder-content-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.binder-track-table {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-body);
+}
+
+.binder-table-head {
+  display: grid;
+  grid-template-columns: 48px 1fr 180px 110px 70px 76px;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  position: sticky;
+  top: 0;
+  background: #0C1018;
+  z-index: 2;
+}
+
+.binder-table-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 4px;
+}
+
+.binder-track-row {
+  display: grid;
+  grid-template-columns: 48px 1fr 180px 110px 70px 76px;
+  align-items: center;
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  transition: background-color 0.12s ease-out, border-color 0.12s ease-out;
+  cursor: pointer;
+  user-select: none;
+}
+
+.binder-track-row:hover {
+  background: #121824;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.binder-track-row.is-selected-row,
+.binder-track-row.is-playing-row {
+  background: #151D2C;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.binder-track-row.is-playing-row {
+  border-left-color: var(--brand-green);
+}
+
+/* Col: Index # or Play Trigger */
+.col-num {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 28px;
+}
+
+.row-index-num {
+  display: block;
+}
+
+.binder-track-row:hover .row-index-num {
+  display: none;
+}
+
+.row-play-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  cursor: pointer;
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+}
+
+.binder-track-row:hover .row-play-btn {
+  display: flex;
+}
+
+.row-play-btn:hover {
+  color: var(--brand-green);
+  transform: scale(1.15);
+}
+
+/* Equalizer Bars when playing */
+.table-equalizer-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+  width: 14px;
+}
+
+.table-equalizer-bars .eq-bar {
+  width: 2px;
+  background: var(--brand-green);
+  border-radius: 1px;
+  animation: eqBounceTable 0.75s ease-in-out infinite alternate;
+}
+
+.table-equalizer-bars .eq-1 { height: 60%; animation-delay: 0.1s; }
+.table-equalizer-bars .eq-2 { height: 100%; animation-delay: 0.3s; }
+.table-equalizer-bars .eq-3 { height: 45%; animation-delay: 0.2s; }
+
+@keyframes eqBounceTable {
+  0% { height: 25%; }
+  100% { height: 100%; }
+}
+
+/* Col: Title & Artist */
+.col-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding-right: 14px;
+}
+
+.row-album-art {
+  width: 42px;
+  height: 42px;
+  border-radius: 0;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #06080D;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.row-title-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  justify-content: center;
+}
+
+.row-track-title {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.binder-track-row.is-playing-row .row-track-title {
+  color: var(--brand-green);
+}
+
+.row-track-artist {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+/* Col: Origin Playlist */
+.col-origin {
+  min-width: 0;
+  padding-right: 12px;
+}
+
+.row-playlist-tag {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Col: Rarity Tier */
+.col-tier {
+  display: flex;
+  align-items: center;
+}
+
+.row-tier-badge {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border: 1px solid;
+  border-radius: 0;
+  background: rgba(6, 8, 13, 0.65);
+}
+
+/* Col: Owned Count */
+.col-count {
+  display: flex;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.row-owned-badge {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 2px 6px;
+  border-radius: 0;
+}
+
+.row-owned-single {
+  color: var(--text-muted);
+  font-size: 12px;
+  padding-left: 4px;
+}
+
+/* Col: Actions (Star & Spotify) */
+.col-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.row-star-btn {
+  background: transparent;
+  border: none;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.12s, transform 0.12s;
+}
+
+.row-star-btn:hover {
+  color: #F59E0B;
+  transform: scale(1.2);
+}
+
+.row-star-btn.is-starred {
+  color: #F59E0B;
+}
+
+.row-spotify-link {
+  color: rgba(255, 255, 255, 0.35);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: color 0.12s, transform 0.12s;
+}
+
+.row-spotify-link:hover {
+  color: #1DB954;
+  transform: scale(1.2);
+}
+
+@media (max-width: 768px) {
+  .binder-table-head {
+    grid-template-columns: 36px 1fr 90px 56px;
+  }
+  .binder-table-head .col-origin,
+  .binder-table-head .col-count {
+    display: none;
+  }
+  .binder-track-row {
+    grid-template-columns: 36px 1fr 90px 56px;
+  }
+  .binder-track-row .col-origin,
+  .binder-track-row .col-count {
+    display: none;
+  }
+}
+
 /* Docked Minimal Binder Audio Player */
 .binder-audio-dock {
   margin: 16px -24px -24px -24px;

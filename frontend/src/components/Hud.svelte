@@ -607,11 +607,11 @@
         class="monolith-btn {$activeModal === 'binder' ? 'active' : ''}"
         id="btnHudBinder"
         type="button"
-        aria-label="Open Unlocked Album Binder"
+        aria-label="Open Unlocked Track Catalogue"
         on:click={handleOpenBinder}
       >
         <div class="monolith-btn-left">
-          <span>Binder</span>
+          <span>Catalogue</span>
           {#if hasNewCard}
             <span class="monolith-badge monolith-badge-new" id="hudBinderNewBadge">+{newUnlockedCount}</span>
           {/if}

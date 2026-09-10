@@ -13,6 +13,7 @@
     gameInventory,
     gameInventoryTimestamps,
     gameRolls,
+    starredTrackIds,
     saveUserData,
   } from '../lib/store.js';
   import {
@@ -582,12 +583,13 @@
       let currentTimes = {};
       let currentUserId = null;
       let currentRolls = 0;
-      let currentStarred = new Set();
+      let currentStarred = null;
 
       gameInventory.subscribe((v) => (currentInv = v))();
       gameInventoryTimestamps.subscribe((v) => (currentTimes = v))();
       activeUserId.subscribe((v) => (currentUserId = v))();
       gameRolls.subscribe((v) => (currentRolls = v))();
+      starredTrackIds.subscribe((v) => (currentStarred = v))();
 
       const prevCount = currentInv[winner.id] || 0;
       currentInv[winner.id] = prevCount + 1;

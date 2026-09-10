@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Spotify PKCE Authentication and Web API client.
  * Runs 100% in the browser on static hosts (GitHub Pages) with zero backend.
  */
@@ -229,7 +229,8 @@ export async function compileMultiPlaylistCrate(token, selectedPlaylists, onProg
 
       const key = `${title.toLowerCase()}||${artist.toLowerCase()}`;
       const coverUrl = (t.album && t.album.images && t.album.images.length > 0) ? t.album.images[0].url : pCover;
-      const previewUrl = t.preview_url || "";
+      // Prefer empty preview_url so the multi-tier Apple/iTunes 30s resolver resolves full previews
+      const previewUrl = "";
       const spotifyUrl = t.external_urls?.spotify || (t.id ? `https://open.spotify.com/track/${t.id}` : "");
 
       if (!trackMap.has(key)) {
