@@ -110,6 +110,7 @@
   let currentReleaseKaomoji = '';
   let showReleaseKaomoji = false;
   let isLogoutHovered = false;
+  let hoverTimer = null;
   let releaseTimer = null;
   let cancelTimers = [];
 
@@ -122,6 +123,10 @@
     : 'default';
 
   function clearCancelTimers() {
+    if (hoverTimer) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
     cancelTimers.forEach((t) => clearTimeout(t));
     cancelTimers = [];
     if (releaseTimer) {
@@ -273,7 +278,19 @@
     cancelHold();
   }
 
+  function handlePointerEnter() {
+    if (hoverTimer) clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(() => {
+      isLogoutHovered = true;
+      hoverTimer = null;
+    }, 100);
+  }
+
   function handlePointerLeave() {
+    if (hoverTimer) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
     isLogoutHovered = false;
     if (isHolding) {
       cancelHold();
@@ -436,7 +453,7 @@
         style="--hold-progress: {holdProgress};"
         class:is-holding={isHolding}
         bind:this={logoutBtnEl}
-        on:pointerenter={() => (isLogoutHovered = true)}
+        on:pointerenter={handlePointerEnter}
         on:pointerdown={handleHoldStart}
         on:pointerup={handleHoldEnd}
         on:pointerleave={handlePointerLeave}

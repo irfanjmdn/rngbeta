@@ -905,7 +905,9 @@ body {
   animation: boil-text 0.14s steps(1) infinite;
 }
 
+.hud-brand-title.is-released,
 .hud-brand-title.is-released .hud-brand-kaomoji {
+  color: #FFFFFF;
   animation: boil-text 0.65s steps(1) infinite;
 }
 
