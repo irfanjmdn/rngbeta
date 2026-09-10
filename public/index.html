@@ -76,36 +76,63 @@
        ========================================================================= -->
   <div class="desktop-reminder-screen hidden" id="desktopReminderScreen">
     <div class="reminder-modal-card">
-      <svg
-        width="48"
-        height="48"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        class="reminder-icon"
-        aria-hidden="true"
-      >
-        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-        <line x1="8" y1="21" x2="16" y2="21"></line>
-        <line x1="12" y1="17" x2="12" y2="21"></line>
-      </svg>
+      <div class="reminder-card-header">
+        <span class="reminder-tag">SYSTEM CALIBRATION</span>
+        <span class="reminder-subtag">ENV-CHECK // DESKTOP ONLY</span>
+      </div>
 
-      <h2 class="reminder-title">This game is only optimized for desktop.</h2>
+      <div class="reminder-card-body">
+        <div class="reminder-icon-box">
+          <svg
+            width="36"
+            height="36"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="reminder-icon"
+            aria-hidden="true"
+          >
+            <rect x="2" y="3" width="20" height="14" rx="0" ry="0"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+        </div>
 
-      <p class="reminder-desc">
-        Spotify Crate RNG uses layouts and effects that are not compatible with mobile interfaces.
-      </p>
+        <h2 class="reminder-title">This game is only optimized for desktop.</h2>
 
-      <button
-        type="button"
-        class="btn-agree-notice"
-        id="btnAgreeNotice"
-      >
-        I Agree
-      </button>
+        <p class="reminder-desc">
+          Track RNG uses precise carousel reel layouts, audio meters, and spatial stage effects built specifically for desktop displays.
+        </p>
+
+        <div class="reminder-specs-grid" aria-label="System Requirements">
+          <div class="reminder-spec-chip">
+            <span class="spec-label">DISPLAY</span>
+            <span class="spec-value">MIN 1280 × 800</span>
+          </div>
+          <div class="reminder-spec-chip">
+            <span class="spec-label">INPUT</span>
+            <span class="spec-value">KEYBOARD & MOUSE</span>
+          </div>
+          <div class="reminder-spec-chip">
+            <span class="spec-label">AUDIO</span>
+            <span class="spec-value">STEREO PREVIEW</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="reminder-card-footer">
+        <button
+          type="button"
+          class="btn-agree-notice"
+          id="btnAgreeNotice"
+        >
+          <span>Proceed to Arena</span>
+          <span class="reminder-btn-kbd">↵ Enter</span>
+        </button>
+      </div>
     </div>
   </div>
 
