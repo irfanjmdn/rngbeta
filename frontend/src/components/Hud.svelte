@@ -59,38 +59,28 @@
   $: hasNewCard = Boolean($unlockedCount && seenUnlockedCount !== null && $unlockedCount > seenUnlockedCount);
   $: newUnlockedCount = hasNewCard ? ($unlockedCount - seenUnlockedCount) : 0;
 
-  // Roll count increase animation state
+  // Roll count increase state (no animation)
   let prevRollCount = $gameRolls || 0;
-  let isRollIncrementing = false;
-  let rollAnimTimer = null;
-
   $: if ($gameRolls !== undefined && $gameRolls !== null) {
-    if ($gameRolls > prevRollCount) {
-      isRollIncrementing = true;
-      if (rollAnimTimer) clearTimeout(rollAnimTimer);
-      rollAnimTimer = setTimeout(() => {
-        isRollIncrementing = false;
-        rollAnimTimer = null;
-      }, 420);
-    }
     prevRollCount = $gameRolls;
   }
 
-  // Mastery count increase animation state
+  // Mastery count increase animation state (mechanical tally reel per digit)
   let prevMasteryCount = $unlockedCount || 0;
-  let isMasteryIncrementing = false;
-  let masteryAnimTimer = null;
+  let masteryDigits = [];
 
-  $: if ($unlockedCount !== undefined && $unlockedCount !== null) {
-    if ($unlockedCount > prevMasteryCount) {
-      isMasteryIncrementing = true;
-      if (masteryAnimTimer) clearTimeout(masteryAnimTimer);
-      masteryAnimTimer = setTimeout(() => {
-        isMasteryIncrementing = false;
-        masteryAnimTimer = null;
-      }, 420);
-    }
-    prevMasteryCount = $unlockedCount;
+  $: {
+    const currentStr = String($unlockedCount ?? 0);
+    const prevStr = String(prevMasteryCount ?? 0).padStart(currentStr.length, ' ');
+    const isIncrease = ($unlockedCount || 0) > prevMasteryCount;
+
+    masteryDigits = currentStr.split('').map((char, idx) => {
+      const prevChar = prevStr[idx];
+      const hasChanged = isIncrease && prevChar !== char;
+      return { char, hasChanged, key: `${idx}-${char}` };
+    });
+
+    prevMasteryCount = $unlockedCount || 0;
   }
 
   // Hold-to-logout state
@@ -672,7 +662,13 @@
       <div class="monolith-meta-row">
         <div class="monolith-stat-left">
           <div class="monolith-stat-count">
-            <span id="hudMasteryVal" class="monolith-mastery-val" class:is-incrementing={isMasteryIncrementing}>{$unlockedCount}</span>
+            <span id="hudMasteryVal" class="monolith-mastery-val" aria-label="{$unlockedCount}">
+              {#each masteryDigits as d (d.key)}
+                <span class="tally-digit-slot">
+                  <span class="tally-digit-char" class:is-rolling={d.hasChanged}>{d.char}</span>
+                </span>
+              {/each}
+            </span>
             <span class="sep">/</span>
             <span id="hudMasteryTotal">{$rngTracks.length}</span>
           </div>
@@ -680,8 +676,8 @@
             <span class="monolith-badge monolith-badge-new monolith-base-indicator" id="hudMonolithNewBadge">+{newUnlockedCount}</span>
           {/if}
         </div>
-        <div class="monolith-stat-rolls" class:is-incrementing={isRollIncrementing}>
-          <span id="hudRolls" class="monolith-rolls-val" class:is-incrementing={isRollIncrementing}>{$gameRolls}</span>
+        <div class="monolith-stat-rolls">
+          <span id="hudRolls" class="monolith-rolls-val">{$gameRolls}</span>
           <span class="monolith-rolls-unit">ROLLS</span>
         </div>
       </div>

@@ -16,6 +16,7 @@ export const reelCurrentX = writable(null);
 export const isAutoRolling = writable(false);
 export const isAutoSkip = writable(false);
 export const isRollNudgeActive = writable(false);
+export const isRollShimmerActive = writable(false);
 export const autoRollMode = writable(
   typeof localStorage !== 'undefined' && localStorage.getItem('crate_autoroll_mode') === 'on_track_end'
     ? 'on_track_end'

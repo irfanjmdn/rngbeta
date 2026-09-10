@@ -1320,13 +1320,43 @@ body {
 }
 
 .monolith-mastery-val {
-  display: inline-block;
+  display: inline-flex;
+  align-items: baseline;
   line-height: 1;
-  will-change: transform, opacity, color;
 }
 
-.monolith-mastery-val.is-incrementing {
-  animation: odometerScrollUp 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.tally-digit-slot {
+  display: inline-block;
+  overflow: hidden;
+  height: 1.05em;
+  vertical-align: baseline;
+}
+
+.tally-digit-char {
+  display: inline-block;
+  line-height: 1.05em;
+  will-change: transform, opacity;
+}
+
+.tally-digit-char.is-rolling {
+  animation: tallyDigitRollUp 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes tallyDigitRollUp {
+  0% {
+    transform: translateY(100%);
+    opacity: 0.2;
+  }
+  30% {
+    opacity: 1;
+  }
+  65% {
+    transform: translateY(-8%);
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .monolith-stat-count .sep {
@@ -1344,7 +1374,6 @@ body {
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
-  overflow: hidden;
 }
 
 .monolith-rolls-val {
@@ -1355,42 +1384,10 @@ body {
   color: #FFFFFF;
   display: inline-block;
   line-height: 1;
-  will-change: opacity;
-}
-
-.monolith-rolls-val.is-incrementing {
-  animation: rollsFadeUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes rollsFadeUp {
-  0% {
-    opacity: 0.25;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes odometerScrollUp {
-  0% {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-  30% {
-    opacity: 1;
-  }
-  65% {
-    transform: translateY(-10%);
-  }
-  100% {
-    transform: translateY(0);
-    opacity: 1;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .monolith-rolls-val.is-incrementing,
-  .monolith-mastery-val.is-incrementing {
+  .tally-digit-char.is-rolling {
     animation: none;
   }
 }
@@ -3363,31 +3360,78 @@ a.meta-tag.source-tag:hover strong {
   animation: none;
 }
 
-/* Nudge hint cue on audio repeat / lowpass loop (subtle tactile shimmer) */
+/* Nudge hint cue on audio repeat / lowpass loop (noticeable tactile elevation & emerald bloom) */
 .btn-big-roll.is-nudged {
-  animation: rollBtnNudge 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: rollBtnNudge 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes rollBtnNudge {
   0% {
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
     box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5), 0 0 22px rgba(16, 185, 129, 0.28);
     border-color: rgba(52, 211, 153, 0.6);
   }
   35% {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55), 0 0 28px rgba(52, 211, 153, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.65);
-    border-color: rgba(52, 211, 153, 0.85);
+    transform: translateY(-2.5px) scale(1.035);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.6), 0 0 32px rgba(52, 211, 153, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+    border-color: #34D399;
   }
   70% {
-    transform: translateY(0);
-    box-shadow: 0 3px 16px rgba(0, 0, 0, 0.5), 0 0 24px rgba(16, 185, 129, 0.35);
-    border-color: rgba(52, 211, 153, 0.7);
+    transform: translateY(0.5px) scale(0.99);
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.5), 0 0 24px rgba(16, 185, 129, 0.38);
+    border-color: #10B981;
   }
   100% {
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
     box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5), 0 0 22px rgba(16, 185, 129, 0.28);
     border-color: rgba(52, 211, 153, 0.6);
+  }
+}
+
+/* Shimmer sweep on roll button during lowpass (styled like legendary card sweep at lower opacity) */
+.roll-btn-shimmer-sweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.roll-btn-shimmer-sweep::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  left: -130%;
+  width: 75%;
+  height: 140%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.02) 15%,
+    rgba(110, 231, 183, 0.45) 50%,
+    rgba(255, 255, 255, 0.1) 75%,
+    transparent 100%
+  );
+  transform: skewX(-24deg);
+  animation: rollBtnShimmerSweep 1.25s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+  mix-blend-mode: screen;
+}
+
+@keyframes rollBtnShimmerSweep {
+  0% {
+    left: -130%;
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.7;
+  }
+  75% {
+    opacity: 0.6;
+  }
+  100% {
+    left: 170%;
+    opacity: 0;
   }
 }
 
@@ -3395,6 +3439,9 @@ a.meta-tag.source-tag:hover strong {
   .btn-big-roll.is-nudged {
     animation: none;
     border-color: rgba(52, 211, 153, 0.85);
+  }
+  .roll-btn-shimmer-sweep::after {
+    animation: none;
   }
 }
 

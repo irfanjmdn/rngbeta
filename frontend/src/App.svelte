@@ -16,6 +16,7 @@
     rngTracks,
     isLoggingOut,
     isRollNudgeActive,
+    isRollShimmerActive,
   } from './lib/store.js';
 
   import Onboarding from './components/Onboarding.svelte';
@@ -471,10 +472,12 @@
     }
   }
 
-  // Roll Button Nudge on Lowpass Loop (2s after lowpass/repeat starts, then every 10s)
+  // Roll Button Nudge & Shimmer on Lowpass Loop
   let nudgeInitialTimer = null;
   let nudgeIntervalTimer = null;
   let nudgePulseClearTimer = null;
+  let shimmerIntervalTimer = null;
+  let shimmerPulseClearTimer = null;
 
   function clearNudgeTimers() {
     if (nudgeInitialTimer) {
@@ -489,7 +492,16 @@
       clearTimeout(nudgePulseClearTimer);
       nudgePulseClearTimer = null;
     }
+    if (shimmerIntervalTimer) {
+      clearInterval(shimmerIntervalTimer);
+      shimmerIntervalTimer = null;
+    }
+    if (shimmerPulseClearTimer) {
+      clearTimeout(shimmerPulseClearTimer);
+      shimmerPulseClearTimer = null;
+    }
     isRollNudgeActive.set(false);
+    isRollShimmerActive.set(false);
   }
 
   function triggerRollNudge() {
@@ -502,18 +514,33 @@
     }, 1100);
   }
 
+  function triggerRollShimmer() {
+    if ($isSpinning || !$isCrateReady || !isArenaBgLooping) return;
+    isRollShimmerActive.set(true);
+    if (shimmerPulseClearTimer) clearTimeout(shimmerPulseClearTimer);
+    shimmerPulseClearTimer = setTimeout(() => {
+      isRollShimmerActive.set(false);
+      shimmerPulseClearTimer = null;
+    }, 1400);
+  }
+
   $: if (!isArenaBgLooping || $isSpinning || !$isCrateReady) {
     clearNudgeTimers();
   } else if (isArenaBgLooping && !$isSpinning && $isCrateReady && !nudgeInitialTimer && !nudgeIntervalTimer) {
-    // Fire nudge 2s after song repeats / engages lowpass
+    // Fire tactile nudge 2s after song repeats / engages lowpass, then every 10s
     nudgeInitialTimer = setTimeout(() => {
       nudgeInitialTimer = null;
       triggerRollNudge();
-      // Then repeat nudge every 10s while still looping in lowpass
       nudgeIntervalTimer = setInterval(() => {
         triggerRollNudge();
       }, 10000);
     }, 2000);
+
+    // Fire shimmer hint on roll button every 5s during lowpass
+    triggerRollShimmer();
+    shimmerIntervalTimer = setInterval(() => {
+      triggerRollShimmer();
+    }, 5000);
   }
 
   onDestroy(() => {
