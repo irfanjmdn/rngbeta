@@ -278,14 +278,22 @@
   }
 
   function handleHoldEnd() {
+    if (hoverTimer) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
+    isLogoutHovered = false;
     if (!isHolding) return;
     cancelHold();
   }
 
   function handlePointerEnter() {
+    if (showReleaseKaomoji) return;
     if (hoverTimer) clearTimeout(hoverTimer);
     hoverTimer = setTimeout(() => {
-      isLogoutHovered = true;
+      if (!showReleaseKaomoji) {
+        isLogoutHovered = true;
+      }
       hoverTimer = null;
     }, 200);
   }
@@ -304,6 +312,11 @@
   function cancelHold() {
     if (!isHolding) return;
     isHolding = false;
+    if (hoverTimer) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
+    isLogoutHovered = false;
 
     // Trigger single random release kaomoji for 0.5 sec
     currentReleaseKaomoji = RELEASE_KAOMOJIS[Math.floor(Math.random() * RELEASE_KAOMOJIS.length)];
@@ -311,6 +324,7 @@
     if (releaseTimer) clearTimeout(releaseTimer);
     releaseTimer = setTimeout(() => {
       showReleaseKaomoji = false;
+      isLogoutHovered = false;
     }, 500);
 
     shrinkStartProgress = holdProgress;
