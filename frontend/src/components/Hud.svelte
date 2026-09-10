@@ -109,11 +109,16 @@
   let currentReleaseKaomoji = '';
   let showReleaseKaomoji = false;
   let isLogoutHovered = false;
+  let releaseTimer = null;
   let cancelTimers = [];
 
   function clearCancelTimers() {
     cancelTimers.forEach((t) => clearTimeout(t));
     cancelTimers = [];
+    if (releaseTimer) {
+      clearTimeout(releaseTimer);
+      releaseTimer = null;
+    }
   }
 
   onDestroy(() => {
@@ -264,16 +269,19 @@
     if (isHolding) {
       cancelHold();
     }
-    showReleaseKaomoji = false;
   }
 
   function cancelHold() {
     if (!isHolding) return;
     isHolding = false;
 
-    // Trigger single random release kaomoji
+    // Trigger single random release kaomoji for 0.5 sec
     currentReleaseKaomoji = RELEASE_KAOMOJIS[Math.floor(Math.random() * RELEASE_KAOMOJIS.length)];
     showReleaseKaomoji = true;
+    if (releaseTimer) clearTimeout(releaseTimer);
+    releaseTimer = setTimeout(() => {
+      showReleaseKaomoji = false;
+    }, 500);
 
     shrinkStartProgress = holdProgress;
     shrinkStartTime = performance.now();
@@ -418,7 +426,6 @@
         aria-label="Hold to Switch Profile"
         style="--hold-progress: {holdProgress};"
         class:is-holding={isHolding}
-        class:is-released={showReleaseKaomoji}
         bind:this={logoutBtnEl}
         on:pointerenter={() => (isLogoutHovered = true)}
         on:pointerdown={handleHoldStart}
@@ -433,20 +440,6 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" class="logout-lightning-icon">
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
           </svg>
-        </span>
-        <span
-          class="logout-hover-text"
-          class:is-holding-text={isHolding}
-          class:is-released-text={showReleaseKaomoji}
-          aria-hidden="true"
-        >
-          {#if isHolding}
-            {currentHoldKaomoji}
-          {:else if showReleaseKaomoji}
-            {currentReleaseKaomoji}
-          {:else if isLogoutHovered}
-            LOG OUT?
-          {/if}
         </span>
       </button>
 
@@ -484,9 +477,22 @@
         {/if}
       </div>
       <div class="hud-brand-titles">
-        <div class="hud-brand-title">
-          trackrolling
-          <span class="hud-beta-badge">BETA</span>
+        <div
+          class="hud-brand-title"
+          class:is-logout-state={isLogoutHovered || isHolding || showReleaseKaomoji}
+          class:is-holding={isHolding}
+          class:is-released={showReleaseKaomoji}
+        >
+          {#if isHolding}
+            <span class="hud-brand-kaomoji">{currentHoldKaomoji}</span>
+          {:else if showReleaseKaomoji}
+            <span class="hud-brand-kaomoji">{currentReleaseKaomoji}</span>
+          {:else if isLogoutHovered}
+            <span class="hud-brand-logout-text">LOG OUT?</span>
+          {:else}
+            trackrolling
+            <span class="hud-beta-badge">BETA</span>
+          {/if}
         </div>
         <div class="hud-brand-sub" id="hudAccountSub">
           {$activeUserId || 'Username'} / {$rngTracks.length} Tracks

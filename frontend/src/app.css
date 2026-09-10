@@ -848,17 +848,14 @@ body {
   box-shadow: 0 0 14px rgba(244, 63, 94, 0.4);
   transform-origin: center;
   transform: scale(calc(1 + var(--hold-progress, 0) * 0.16));
-  transition: width 0.22s cubic-bezier(0.22, 0.61, 0.36, 1), transform 0.18s cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 0.18s ease, background-color 0.18s ease;
+  transition: transform 0.18s cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 0.18s ease, background-color 0.18s ease;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
   overflow: hidden;
 }
 
-.hud-logo-mark:hover,
-.hud-logo-mark.is-holding,
-.hud-logo-mark.is-released {
-  width: 104px;
+.hud-logo-mark:hover {
   box-shadow: 0 0 20px rgba(244, 63, 94, 0.75);
 }
 
@@ -872,60 +869,41 @@ body {
   justify-content: center;
   position: absolute;
   inset: 0;
-  transition: opacity 0.15s ease, transform 0.15s ease;
   pointer-events: none;
 }
 
-.hud-logo-mark:hover .logout-default-icon,
-.hud-logo-mark.is-holding .logout-default-icon,
-.hud-logo-mark.is-released .logout-default-icon {
-  opacity: 0;
-  transform: scale(0.65);
+.hud-brand-title.is-logout-state {
+  color: #F43F5E;
 }
 
-.logout-hover-text {
-  position: absolute;
+.hud-brand-logout-text {
   font-family: var(--font-rarity);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.06em;
-  color: #000000;
+  color: #F43F5E;
+  text-transform: uppercase;
+  animation: boil-text 0.35s steps(1) infinite;
   white-space: nowrap;
-  opacity: 0;
-  transform: scale(0.9);
-  transition: opacity 0.18s ease, transform 0.18s ease;
-  pointer-events: none;
-  user-select: none;
   line-height: 1;
 }
 
-.logout-hover-text.is-holding-text,
-.logout-hover-text.is-released-text {
+.hud-brand-kaomoji {
   font-family: system-ui, -apple-system, 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif;
-  font-size: 11.5px;
-  font-weight: 400;
+  font-size: 12px;
+  font-weight: 500;
   letter-spacing: 0;
+  color: #F43F5E;
+  text-transform: none;
+  white-space: nowrap;
+  line-height: 1;
 }
 
-.hud-logo-mark:hover .logout-hover-text {
-  opacity: 1;
-  transform: scale(1);
-  animation: boil-text 0.35s steps(1) infinite;
-}
-
-/* Higher speed boiling distortion during hold */
-.hud-logo-mark.is-holding .logout-hover-text,
-.logout-hover-text.is-holding-text {
-  opacity: 1;
-  transform: scale(1);
+.hud-brand-title.is-holding .hud-brand-kaomoji {
   animation: boil-text 0.14s steps(1) infinite;
 }
 
-/* Lower speed boiling distortion after release */
-.hud-logo-mark.is-released .logout-hover-text,
-.logout-hover-text.is-released-text {
-  opacity: 1;
-  transform: scale(1);
+.hud-brand-title.is-released .hud-brand-kaomoji {
   animation: boil-text 0.65s steps(1) infinite;
 }
 
@@ -1107,10 +1085,6 @@ body {
   gap: 6px;
   user-select: none;
   transition: transform 0.2s ease;
-}
-
-.hud-brand-pill:hover .hud-brand-title {
-  animation: boil-text 0.35s steps(1) infinite;
 }
 
 .hud-beta-badge {
