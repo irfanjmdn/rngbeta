@@ -1,5 +1,6 @@
 <script>
   import { onDestroy } from 'svelte';
+  import { fly } from 'svelte/transition';
   import {
     activeMode,
     activeUserId,
@@ -508,18 +509,32 @@
           class:is-holding={brandDisplayState === 'holding'}
           class:is-released={brandDisplayState === 'released'}
         >
-          <div class="hud-brand-text-slide">
-            {#if brandDisplayState === 'holding'}
+          {#if brandDisplayState === 'holding'}
+            <div class="hud-brand-text-slide">
               <span class="hud-brand-kaomoji">{currentHoldKaomoji}</span>
-            {:else if brandDisplayState === 'released'}
+            </div>
+          {:else if brandDisplayState === 'released'}
+            <div class="hud-brand-text-slide">
               <span class="hud-brand-kaomoji">{currentReleaseKaomoji}</span>
-            {:else if brandDisplayState === 'logout'}
+            </div>
+          {:else if brandDisplayState === 'logout'}
+            <div
+              class="hud-brand-text-slide"
+              in:fly={{ y: 18, duration: 160, opacity: 1 }}
+              out:fly={{ y: -18, duration: 140, opacity: 1 }}
+            >
               <span class="hud-brand-logout-text">LOG OUT?</span>
-            {:else}
+            </div>
+          {:else}
+            <div
+              class="hud-brand-text-slide"
+              in:fly={{ y: 18, duration: 160, opacity: 1 }}
+              out:fly={{ y: -18, duration: 140, opacity: 1 }}
+            >
               <span class="hud-brand-default-text">trackrolling</span>
               <span class="hud-beta-badge">BETA</span>
-            {/if}
-          </div>
+            </div>
+          {/if}
         </div>
         <div class="hud-brand-sub" id="hudAccountSub">
           {$activeUserId || 'Username'} / {$rngTracks.length} Tracks
