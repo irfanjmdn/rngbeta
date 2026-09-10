@@ -59,6 +59,23 @@
   $: hasNewCard = Boolean($unlockedCount && seenUnlockedCount !== null && $unlockedCount > seenUnlockedCount);
   $: newUnlockedCount = hasNewCard ? ($unlockedCount - seenUnlockedCount) : 0;
 
+  // Roll count increase animation state
+  let prevRollCount = $gameRolls || 0;
+  let isRollIncrementing = false;
+  let rollAnimTimer = null;
+
+  $: if ($gameRolls !== undefined && $gameRolls !== null) {
+    if ($gameRolls > prevRollCount) {
+      isRollIncrementing = true;
+      if (rollAnimTimer) clearTimeout(rollAnimTimer);
+      rollAnimTimer = setTimeout(() => {
+        isRollIncrementing = false;
+        rollAnimTimer = null;
+      }, 360);
+    }
+    prevRollCount = $gameRolls;
+  }
+
   // Hold-to-logout state
   let holdProgress = 0;
   let holdAnimFrame = null;
@@ -141,6 +158,10 @@
 
   onDestroy(() => {
     clearCancelTimers();
+    if (rollAnimTimer) {
+      clearTimeout(rollAnimTimer);
+      rollAnimTimer = null;
+    }
     if (holdAnimFrame) {
       cancelAnimationFrame(holdAnimFrame);
       holdAnimFrame = null;
@@ -642,8 +663,9 @@
             <span class="monolith-badge monolith-badge-new monolith-base-indicator" id="hudMonolithNewBadge">+{newUnlockedCount}</span>
           {/if}
         </div>
-        <div class="monolith-stat-rolls">
-          <span id="hudRolls">{$gameRolls}</span> ROLLS
+        <div class="monolith-stat-rolls" class:is-incrementing={isRollIncrementing}>
+          <span id="hudRolls" class="monolith-rolls-val" class:is-incrementing={isRollIncrementing}>{$gameRolls}</span>
+          <span class="monolith-rolls-unit">ROLLS</span>
         </div>
       </div>
 

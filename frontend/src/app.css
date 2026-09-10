@@ -1328,9 +1328,58 @@ body {
   letter-spacing: 0.06em;
   color: var(--text-muted);
   text-transform: uppercase;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
 }
 
-.monolith-base:hover .monolith-stat-rolls {
+.monolith-rolls-val {
+  font-family: var(--font-rarity);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: #FFFFFF;
+  display: inline-block;
+  line-height: 1;
+  transform-origin: center bottom;
+  will-change: transform, color;
+}
+
+.monolith-rolls-val.is-incrementing {
+  animation: monolith-roll-tick 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes monolith-roll-tick {
+  0% {
+    transform: translateY(-4px) scale(1.22);
+    color: var(--brand-green);
+  }
+  45% {
+    transform: translateY(1px) scale(0.96);
+    color: var(--brand-green);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    color: #FFFFFF;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .monolith-rolls-val.is-incrementing {
+    animation: none;
+    color: var(--brand-green);
+  }
+}
+
+.monolith-rolls-unit {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
+
+.monolith-base:hover .monolith-stat-rolls,
+.monolith-base:hover .monolith-rolls-unit {
   color: #CBD5E1;
 }
 
