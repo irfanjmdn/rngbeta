@@ -12,6 +12,18 @@
 
   let currentPercent = Math.round(getSfxVolume() * 100);
   let musicPercent = Math.round(getMusicVolume() * 100);
+  let lastfmApiKey = typeof localStorage !== 'undefined' ? (localStorage.getItem('crate_lastfm_api_key') || '') : '';
+
+  function handleLastfmKeyInput(e) {
+    lastfmApiKey = (e.target.value || '').trim();
+    if (typeof localStorage !== 'undefined') {
+      if (lastfmApiKey) {
+        localStorage.setItem('crate_lastfm_api_key', lastfmApiKey);
+      } else {
+        localStorage.removeItem('crate_lastfm_api_key');
+      }
+    }
+  }
 
   function closeModal() {
     activeModal.set(null);
@@ -153,6 +165,26 @@
             </svg>
             Test Star Chime
           </button>
+        </div>
+      </div>
+
+      <!-- Last.fm API Key Section -->
+      <div class="settings-section">
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="settings-label">Last.fm API Key (Optional)</div>
+            <div class="settings-sublabel">Personal API key to bypass shared rate limits. Leave blank to use built-in pool.</div>
+          </div>
+        </div>
+        <div class="settings-input-wrap">
+          <input
+            type="text"
+            class="settings-text-input"
+            id="lastfmApiKeyInput"
+            placeholder="Paste 32-character API key..."
+            value={lastfmApiKey}
+            on:input={handleLastfmKeyInput}
+          />
         </div>
       </div>
     </div>

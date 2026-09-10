@@ -7,24 +7,140 @@ const wait = (ms) => new Promise((res) => setTimeout(res, ms));
  * @param {string} username Last.fm username
  * @param {(ev: any) => void} onEvent Callback for dispatching ready/error events
  */
-export async function loadLastfmCrateClient(username, onEvent) {
-  appendLog(`Connecting to Last.fm API for user '${username}'...`, 'info');
-  const apiKey = 'b25b959554ed76058ac220b7b2e0a026';
+const BUILTIN_KEYS = [
+  'a93da16045abb894cb7a4482255247bb',
+  'd64ba82baaf21554416b25365c114455',
+  'ffd6c3e445e45d0d4bc124184853b772',
+  '0356663ee33a0a5d27428b1f63011652',
+  'b25b959554ed76058ac220b7b2e0a026',
+];
+
+function getApiKeyPool() {
+  const pool = [];
+  if (typeof localStorage !== 'undefined') {
+    const custom = localStorage.getItem('crate_lastfm_api_key')?.trim();
+    if (custom) pool.push(custom);
+  }
+  pool.push(...BUILTIN_KEYS);
+  return pool;
+}
+
+let activeKeyIndex = 0;
+
+function getActiveKey(keys) {
+  return keys[activeKeyIndex % keys.length];
+}
+
+function rotateKey(keys) {
+  activeKeyIndex = (activeKeyIndex + 1) % keys.length;
+  return keys[activeKeyIndex % keys.length];
+}
+
+async function requestLastfm(method, params, keys) {
+  const maxTries = keys.length;
+  let lastError = null;
+
+  for (let attempt = 0; attempt < maxTries; attempt++) {
+    const key = getActiveKey(keys);
+    const search = new URLSearchParams({
+      method,
+      api_key: key,
+      format: 'json',
+      ...params,
+    });
+    const url = `https://ws.audioscrobbler.com/2.0/?${search.toString()}`;
+
+    try {
+      const res = await fetch(url);
+      if (res.status === 429) {
+        appendLog(`Last.fm key #${(activeKeyIndex % keys.length) + 1} rate limited. Switching to backup key...`, 'warning');
+        rotateKey(keys);
+        await wait(250);
+        continue;
+      }
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (data.error === 29) {
+        appendLog(`Last.fm key #${(activeKeyIndex % keys.length) + 1} rate limit reached. Switching to backup key...`, 'warning');
+        rotateKey(keys);
+        await wait(250);
+        continue;
+      }
+      if (data.error) {
+        throw new Error(data.message || `Last.fm error ${data.error}`);
+      }
+      return data;
+    } catch (err) {
+      lastError = err;
+      if (err.message && err.message.toLowerCase().includes('rate limit')) {
+        rotateKey(keys);
+        await wait(250);
+        continue;
+      }
+      await wait(400);
+    }
+  }
+  throw lastError || new Error('All Last.fm API keys in the pool were rate limited.');
+}
+
+const CACHE_PREFIX = 'crate_lastfm_cache_v1_';
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+function loadCachedCrate(username) {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`${CACHE_PREFIX}${username.toLowerCase()}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Date.now() - (parsed.timestamp || 0) < CACHE_TTL_MS && parsed.payload) {
+      return parsed.payload;
+    }
+  } catch {}
+  return null;
+}
+
+function saveCachedCrate(username, payload) {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(
+      `${CACHE_PREFIX}${username.toLowerCase()}`,
+      JSON.stringify({ timestamp: Date.now(), payload })
+    );
+  } catch {}
+}
+
+/**
+ * Fetch scrobble history from Last.fm API directly in the client and construct crate tracks.
+ * @param {string} username Last.fm username
+ * @param {(ev: any) => void} onEvent Callback for dispatching ready/error events
+ * @param {boolean} forceRefresh Force a fresh network fetch ignoring cache
+ */
+export async function loadLastfmCrateClient(username, onEvent, forceRefresh = false) {
+  // Check local cache first
+  if (!forceRefresh) {
+    const cached = loadCachedCrate(username);
+    if (cached && cached.tracks && cached.tracks.length > 0) {
+      appendLog(`Loaded ${cached.tracks.length} tracks from browser cache for '${username}'.`, 'success');
+      appendLog('Crate RNG initialized. Ready to roll!', 'success');
+      onEvent(cached);
+      return;
+    }
+  }
+
+  const keys = getApiKeyPool();
+  appendLog(`Connecting to Last.fm API for user '${username}' (using ${keys.length}-key pool)...`, 'info');
 
   let avatarUrl = null;
   let displayName = username;
   try {
-    const uRes = await fetch(
-      `https://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=${encodeURIComponent(username)}&api_key=${apiKey}&format=json`
-    );
-    if (uRes.ok) {
-      const uData = await uRes.json();
-      if (uData.user) {
-        displayName = uData.user.name || username;
-        const imgs = uData.user.image || [];
-        if (imgs.length > 0) {
-          avatarUrl = imgs[imgs.length - 1]['#text'] || null;
-        }
+    const uData = await requestLastfm('user.getinfo', { user: username }, keys);
+    if (uData && uData.user) {
+      displayName = uData.user.name || username;
+      const imgs = uData.user.image || [];
+      if (imgs.length > 0) {
+        avatarUrl = imgs[imgs.length - 1]['#text'] || null;
       }
     }
   } catch (e) {
@@ -33,48 +149,16 @@ export async function loadLastfmCrateClient(username, onEvent) {
 
   appendLog(`Fetching listening history from Last.fm for '${displayName}'...`, 'info');
   try {
-    const fetchPage = async (pageNum, retries = 2) => {
-      const url = `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${encodeURIComponent(username)}&limit=200&page=${pageNum}&api_key=${apiKey}&format=json`;
-      for (let attempt = 0; attempt <= retries; attempt++) {
-        try {
-          const res = await fetch(url);
-          if (!res.ok) {
-            if (attempt < retries) {
-              await wait(1200);
-              continue;
-            }
-            throw new Error(`Last.fm returned HTTP ${res.status}`);
-          }
-          const data = await res.json();
-          if (data.error) {
-            if (data.error === 29 && attempt < retries) {
-              await wait(1400);
-              continue;
-            }
-            throw new Error(data.message || `Last.fm API error ${data.error}`);
-          }
-          return data;
-        } catch (err) {
-          if (attempt < retries) {
-            await wait(1200);
-            continue;
-          }
-          throw err;
-        }
-      }
-      return null;
-    };
+    const rawScrobbles = [];
 
+    // 1. Fetch page 1 to inspect total scrobbles and totalPages
+    const p1Data = await requestLastfm('user.getrecenttracks', { user: username, limit: '200', page: '1' }, keys);
     const extractTracks = (data) => {
       if (!data?.recenttracks?.track) return [];
       const t = data.recenttracks.track;
       return Array.isArray(t) ? t : [t];
     };
 
-    const rawScrobbles = [];
-
-    // 1. Fetch page 1 to inspect total scrobbles and totalPages
-    const p1Data = await fetchPage(1);
     const p1Batch = extractTracks(p1Data);
     if (!p1Batch.length) {
       throw new Error(`No recent tracks found for Last.fm user '${username}'`);
@@ -105,9 +189,9 @@ export async function loadLastfmCrateClient(username, onEvent) {
     if (extraPages.length > 0) {
       appendLog(`Sampling listening timeline across pages: ${extraPages.join(', ')}...`, 'info');
       for (const pageNum of extraPages) {
-        await wait(260);
+        await wait(300);
         try {
-          const data = await fetchPage(pageNum, 1);
+          const data = await requestLastfm('user.getrecenttracks', { user: username, limit: '200', page: pageNum.toString() }, keys);
           const batch = extractTracks(data);
           rawScrobbles.push(...batch);
         } catch (pageErr) {
@@ -232,7 +316,7 @@ export async function loadLastfmCrateClient(username, onEvent) {
     );
     appendLog('Crate RNG initialized. Ready to roll!', 'success');
 
-    onEvent({
+    const readyPayload = {
       type: 'ready',
       userId: displayName,
       rawUserId: username,
@@ -241,7 +325,10 @@ export async function loadLastfmCrateClient(username, onEvent) {
       tracksCount: allTracks.length,
       tracks: allTracks,
       distribution: tierCounts,
-    });
+    };
+
+    saveCachedCrate(username, readyPayload);
+    onEvent(readyPayload);
   } catch (err) {
     appendLog(`Last.fm load error: ${err.message}`, 'error');
     onEvent({ type: 'error', message: err.message });

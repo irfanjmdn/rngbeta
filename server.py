@@ -375,20 +375,59 @@ def compute_dynamic_rarity_tracks(playlists_data):
     return all_tracks
 
 
+LASTFM_API_KEYS = [
+    "a93da16045abb894cb7a4482255247bb",
+    "d64ba82baaf21554416b25365c114455",
+    "ffd6c3e445e45d0d4bc124184853b772",
+    "0356663ee33a0a5d27428b1f63011652",
+    "b25b959554ed76058ac220b7b2e0a026"
+]
+
+
+def request_lastfm_api(method, params, headers=None, sse_log_fn=None):
+    """Call Last.fm API with automatic key failover on rate limits."""
+    if headers is None:
+        headers = {"User-Agent": "CrateRNG/2.0"}
+    for idx, key in enumerate(LASTFM_API_KEYS):
+        all_params = {"method": method, "api_key": key, "format": "json"}
+        all_params.update(params)
+        qs = urllib.parse.urlencode(all_params)
+        url = f"https://ws.audioscrobbler.com/2.0/?{qs}"
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+                if data.get("error") == 29:
+                    if sse_log_fn:
+                        sse_log_fn(f"Key #{idx + 1} rate limited. Switching to backup key...", "warning")
+                    continue
+                if "error" in data:
+                    raise Exception(data.get("message") or f"Last.fm error {data.get('error')}")
+                return data
+        except urllib.error.HTTPError as he:
+            if he.code == 429:
+                if sse_log_fn:
+                    sse_log_fn(f"Key #{idx + 1} hit HTTP 429. Switching to backup key...", "warning")
+                continue
+            raise
+        except Exception:
+            if idx < len(LASTFM_API_KEYS) - 1:
+                continue
+            raise
+    raise Exception("All Last.fm API keys rate limited.")
+
+
 def fetch_lastfm_crate(username, sse_log_fn=None):
     """Fetch user's top tracks from Last.fm and format them as Crate RNG tracks."""
-    api_key = "b25b959554ed76058ac220b7b2e0a026"
-    headers = {"User-Agent": "CrateRNG/1.0"}
+    headers = {"User-Agent": "CrateRNG/2.0"}
     
     if sse_log_fn:
         sse_log_fn(f"Fetching Last.fm user info for '{username}'...")
         
-    user_url = f"https://ws.audioscrobbler.com/2.0/?method=user.getinfo&user={urllib.parse.quote(username)}&api_key={api_key}&format=json"
     user_info = {"displayName": username, "avatarUrl": None, "playcount": 0}
     try:
-        req = urllib.request.Request(user_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            u_data = json.loads(resp.read().decode())
+        u_data = request_lastfm_api("user.getinfo", {"user": username}, headers=headers, sse_log_fn=sse_log_fn)
+        if u_data:
             u = u_data.get("user", {})
             user_info["displayName"] = u.get("name") or username
             images = u.get("image", [])
@@ -403,12 +442,10 @@ def fetch_lastfm_crate(username, sse_log_fn=None):
 
     raw_scrobbles = []
     # 1. Fetch page 1
-    p1_url = f"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={urllib.parse.quote(username)}&limit=200&page=1&api_key={api_key}&format=json"
     total_pages = 1
     try:
-        req = urllib.request.Request(p1_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            t_data = json.loads(resp.read().decode())
+        t_data = request_lastfm_api("user.getrecenttracks", {"user": username, "limit": 200, "page": 1}, headers=headers, sse_log_fn=sse_log_fn)
+        if t_data:
             batch = t_data.get("recenttracks", {}).get("track", [])
             raw_scrobbles.extend(batch)
             total_pages = int(t_data.get("recenttracks", {}).get("@attr", {}).get("totalPages", 1))
@@ -441,14 +478,12 @@ def fetch_lastfm_crate(username, sse_log_fn=None):
         sse_log_fn(f"Sampling listening timeline across pages: {', '.join(map(str, extra_pages))}...", "info")
 
     for p in extra_pages:
-        tracks_url = f"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={urllib.parse.quote(username)}&limit=200&page={p}&api_key={api_key}&format=json"
         try:
-            req = urllib.request.Request(tracks_url, headers=headers)
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                t_data = json.loads(resp.read().decode())
+            t_data = request_lastfm_api("user.getrecenttracks", {"user": username, "limit": 200, "page": p}, headers=headers, sse_log_fn=sse_log_fn)
+            if t_data:
                 batch = t_data.get("recenttracks", {}).get("track", [])
                 raw_scrobbles.extend(batch)
-            time.sleep(0.12)
+            time.sleep(0.15)
         except Exception as e:
             if sse_log_fn:
                 sse_log_fn(f"Notice fetching page {p}: {e}", "warning")

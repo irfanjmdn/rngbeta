@@ -85,7 +85,7 @@ export async function fetchAndBuildCrate(inputStr, mode = 'lastfm', forceRefresh
       lastfmUser = lastfmUser.split('lastfm:')[1].trim();
     }
     appendLog(`Initiating Last.fm request for user: ${lastfmUser}`, 'system');
-    await loadLastfmCrateClient(lastfmUser, onEvent);
+    await loadLastfmCrateClient(lastfmUser, onEvent, forceRefresh);
   } else {
     appendLog(`Initiating Spotify request for input: ${cleanInput}`, 'system');
     await loadSpotifyCrateClient(cleanInput, forceRefresh, onEvent);
