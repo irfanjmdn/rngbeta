@@ -1,6 +1,5 @@
 <script>
   import { onDestroy } from 'svelte';
-  import { fly } from 'svelte/transition';
   import {
     activeMode,
     activeUserId,
@@ -114,8 +113,6 @@
   let releaseTimer = null;
   let cancelTimers = [];
 
-  let previousBrandDisplayState = 'default';
-
   $: brandDisplayState = isHolding
     ? 'holding'
     : showReleaseKaomoji
@@ -123,9 +120,6 @@
     : isLogoutHovered
     ? 'logout'
     : 'default';
-
-  $: shouldAnimateBrandText = !(previousBrandDisplayState === 'released' && brandDisplayState === 'default');
-  $: previousBrandDisplayState = brandDisplayState;
 
   function clearCancelTimers() {
     if (hoverTimer) {
@@ -514,24 +508,18 @@
           class:is-holding={brandDisplayState === 'holding'}
           class:is-released={brandDisplayState === 'released'}
         >
-          {#key brandDisplayState}
-            <div
-              class="hud-brand-text-slide"
-              in:fly={{ y: shouldAnimateBrandText ? 18 : 0, duration: shouldAnimateBrandText ? 160 : 0, opacity: 1 }}
-              out:fly={{ y: shouldAnimateBrandText ? -18 : 0, duration: shouldAnimateBrandText ? 140 : 0, opacity: 1 }}
-            >
-              {#if brandDisplayState === 'holding'}
-                <span class="hud-brand-kaomoji">{currentHoldKaomoji}</span>
-              {:else if brandDisplayState === 'released'}
-                <span class="hud-brand-kaomoji">{currentReleaseKaomoji}</span>
-              {:else if brandDisplayState === 'logout'}
-                <span class="hud-brand-logout-text">LOG OUT?</span>
-              {:else}
-                <span class="hud-brand-default-text">trackrolling</span>
-                <span class="hud-beta-badge">BETA</span>
-              {/if}
-            </div>
-          {/key}
+          <div class="hud-brand-text-slide">
+            {#if brandDisplayState === 'holding'}
+              <span class="hud-brand-kaomoji">{currentHoldKaomoji}</span>
+            {:else if brandDisplayState === 'released'}
+              <span class="hud-brand-kaomoji">{currentReleaseKaomoji}</span>
+            {:else if brandDisplayState === 'logout'}
+              <span class="hud-brand-logout-text">LOG OUT?</span>
+            {:else}
+              <span class="hud-brand-default-text">trackrolling</span>
+              <span class="hud-beta-badge">BETA</span>
+            {/if}
+          </div>
         </div>
         <div class="hud-brand-sub" id="hudAccountSub">
           {$activeUserId || 'Username'} / {$rngTracks.length} Tracks
