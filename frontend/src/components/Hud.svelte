@@ -284,13 +284,13 @@
     if (!isHolding) return;
     isHolding = false;
 
-    // Trigger single random release kaomoji for 0.5 sec
+    // Trigger single random release kaomoji for 0.3 sec
     currentReleaseKaomoji = RELEASE_KAOMOJIS[Math.floor(Math.random() * RELEASE_KAOMOJIS.length)];
     showReleaseKaomoji = true;
     if (releaseTimer) clearTimeout(releaseTimer);
     releaseTimer = setTimeout(() => {
       showReleaseKaomoji = false;
-    }, 500);
+    }, 300);
 
     shrinkStartProgress = holdProgress;
     shrinkStartTime = performance.now();
@@ -495,8 +495,8 @@
           {#key brandDisplayState}
             <div
               class="hud-brand-text-slide"
-              in:fly={{ y: 7, duration: 180, opacity: 0 }}
-              out:fly={{ y: -7, duration: 140, opacity: 0 }}
+              in:fly={{ y: 16, duration: 80, delay: 80, opacity: 1 }}
+              out:fly={{ y: -16, duration: 80, opacity: 1 }}
             >
               {#if brandDisplayState === 'holding'}
                 <span class="hud-brand-kaomoji">{currentHoldKaomoji}</span>
