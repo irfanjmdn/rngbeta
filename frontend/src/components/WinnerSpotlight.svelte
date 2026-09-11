@@ -234,7 +234,7 @@
   }
 
   function handleGlobalPointerMove(e) {
-    if (!spotlightEl) return;
+    if (!spotlightEl || (window.innerWidth && window.innerWidth <= 768)) return;
     const rect = spotlightEl.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
 

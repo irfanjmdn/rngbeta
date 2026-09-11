@@ -27,15 +27,29 @@
   let inputEl;
   let terminalEl;
   let isConsoleOpen = false;
+  let userScrolledUp = false;
+
+  function handleTerminalScroll() {
+    if (!terminalEl) return;
+    const distanceFromBottom = terminalEl.scrollHeight - terminalEl.scrollTop - terminalEl.clientHeight;
+    userScrolledUp = distanceFromBottom > 35;
+  }
 
   // Auto-open console when logs appear or error occurs, but never auto-close it
   $: if ($debugLogs.length > 0 || $debugStatus === 'error' || $debugStatus === 'running') {
     isConsoleOpen = true;
   }
 
-  $: if ($debugLogs && terminalEl) {
+  // Reset scroll lock when a new crate build starts
+  $: if ($isBuildingCrate) {
+    userScrolledUp = false;
+  }
+
+  $: if ($debugLogs && terminalEl && !userScrolledUp) {
     setTimeout(() => {
-      if (terminalEl) terminalEl.scrollTop = terminalEl.scrollHeight;
+      if (terminalEl && !userScrolledUp) {
+        terminalEl.scrollTop = terminalEl.scrollHeight;
+      }
     }, 10);
   }
 
@@ -360,7 +374,12 @@
           </div>
           <span class="debug-badge" id="debugBadge">{$debugLogs.length} events</span>
         </summary>
-        <div class="debug-terminal" id="debugTerminal" bind:this={terminalEl}>
+        <div
+          class="debug-terminal"
+          id="debugTerminal"
+          bind:this={terminalEl}
+          on:scroll={handleTerminalScroll}
+        >
           {#each $debugLogs as log}
             <div class="terminal-line {log.level}">
               {log.time ? `[${log.time}] ` : ''}{log.message}

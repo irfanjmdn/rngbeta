@@ -1,5 +1,5 @@
 <script>
-  import { onDestroy } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { fade } from 'svelte/transition';
   import {
     activeMode,
@@ -86,7 +86,9 @@
   // Hold-to-logout state
   let holdProgress = 0;
   let holdAnimFrame = null;
-  let holdStartTime = 0;
+  let isShiftActive = false;
+  let effectiveElapsed = 0;
+  let lastHoldTickTime = 0;
   let rumbleAudioController = null;
   let isHolding = false;
   let holdCompleted = false;
@@ -158,6 +160,10 @@
 
   onDestroy(() => {
     clearCancelTimers();
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('keydown', handleWindowKeyDown);
+      window.removeEventListener('keyup', handleWindowKeyUp);
+    }
     if (rollAnimTimer) {
       clearTimeout(rollAnimTimer);
       rollAnimTimer = null;
@@ -228,7 +234,9 @@
       holdAnimFrame = null;
     }
     isHolding = true;
-    holdStartTime = performance.now();
+    isShiftActive = Boolean(e && e.shiftKey);
+    effectiveElapsed = 0;
+    lastHoldTickTime = performance.now();
     holdProgress = 0;
     showSquares = false;
     squaresFilled = 0;
@@ -245,38 +253,42 @@
   function runHoldLoop() {
     if (!isHolding) return;
     const now = performance.now();
-    const elapsed = now - holdStartTime;
+    const dt = Math.min(100, now - lastHoldTickTime);
+    lastHoldTickTime = now;
 
-    // Stage 1: Red circle expands to cover viewport over 1000ms
-    const circleLinear = Math.min(1, elapsed / EXPAND_DURATION_MS);
+    const speed = isShiftActive ? 3 : 1;
+    effectiveElapsed += dt * speed;
+
+    // Stage 1: Red circle expands to cover viewport over EXPAND_DURATION_MS
+    const circleLinear = Math.min(1, effectiveElapsed / EXPAND_DURATION_MS);
     holdProgress = 1 - Math.pow(1 - circleLinear, 3);
 
     if (rumbleAudioController) {
-      const overallRatio = Math.min(1, elapsed / TOTAL_HOLD_DURATION_MS);
+      const overallRatio = Math.min(1, effectiveElapsed / TOTAL_HOLD_DURATION_MS);
       rumbleAudioController.setIntensity(overallRatio);
     }
 
-    // Stage 2: After 1000ms, reveal squares track and shift text up
-    if (elapsed >= EXPAND_DURATION_MS && !showSquares) {
+    // Stage 2: After EXPAND_DURATION_MS, reveal squares track and shift text up
+    if (effectiveElapsed >= EXPAND_DURATION_MS && !showSquares) {
       showSquares = true;
     }
 
     // Sequential filling of the 3 squares
-    if (elapsed >= EXPAND_DURATION_MS + SQUARE_STEP_MS && squaresFilled < 1) {
+    if (effectiveElapsed >= EXPAND_DURATION_MS + SQUARE_STEP_MS && squaresFilled < 1) {
       squaresFilled = 1;
       playLogoutSquareSound(1);
     }
-    if (elapsed >= EXPAND_DURATION_MS + SQUARE_STEP_MS * 2 && squaresFilled < 2) {
+    if (effectiveElapsed >= EXPAND_DURATION_MS + SQUARE_STEP_MS * 2 && squaresFilled < 2) {
       squaresFilled = 2;
       playLogoutSquareSound(2);
     }
-    if (elapsed >= EXPAND_DURATION_MS + SQUARE_STEP_MS * 3 && squaresFilled < 3) {
+    if (effectiveElapsed >= EXPAND_DURATION_MS + SQUARE_STEP_MS * 3 && squaresFilled < 3) {
       squaresFilled = 3;
       playLogoutSquareSound(3);
     }
 
     // Hold complete: all squares filled, freeze overlay, dwell, and execute
-    if (elapsed >= TOTAL_HOLD_DURATION_MS) {
+    if (effectiveElapsed >= TOTAL_HOLD_DURATION_MS) {
       isHolding = false;
       holdCompleted = true;
       holdProgress = 1;
@@ -289,9 +301,10 @@
         rumbleAudioController = null;
       }
       setArenaReverbWet(0, 0.05);
+      const dwellMs = isShiftActive ? Math.round(LOGOUT_DWELL_MS / 3) : LOGOUT_DWELL_MS;
       setTimeout(() => {
         executeSwitchAccount();
-      }, LOGOUT_DWELL_MS);
+      }, dwellMs);
       return;
     }
 
@@ -364,9 +377,10 @@
     if (squaresFilled > 0) {
       const currentFilled = squaresFilled;
       clearSquarePipTimers();
+      const stepDelay = isShiftActive ? 15 : 45;
 
       for (let i = currentFilled; i >= 1; i--) {
-        const delay = (currentFilled - i) * 45;
+        const delay = (currentFilled - i) * stepDelay;
         const timer = setTimeout(() => {
           squaresFilled = i - 1;
           playLogoutCancelPipSound(i);
@@ -376,7 +390,7 @@
         }, delay);
         cancelTimers.push(timer);
       }
-      const totalReverseTime = currentFilled * 45 + 30;
+      const totalReverseTime = currentFilled * stepDelay + 20;
       const endTimer = setTimeout(() => {
         showSquares = false;
         squaresFilled = 0;
@@ -393,7 +407,8 @@
   function runShrinkLoop() {
     const now = performance.now();
     const elapsed = now - shrinkStartTime;
-    const linear = Math.min(1, elapsed / SHRINK_DURATION_MS);
+    const duration = isShiftActive ? (SHRINK_DURATION_MS / 3) : SHRINK_DURATION_MS;
+    const linear = Math.min(1, elapsed / duration);
     const eased = 1 - Math.pow(1 - linear, 3);
     holdProgress = shrinkStartProgress * (1 - eased);
 
@@ -460,11 +475,230 @@
   $: epicPct = (unlockedTracks.filter((t) => t.rarityTier === 'epic').length / totalTracks) * 100;
   $: legendaryPct = (unlockedTracks.filter((t) => t.rarityTier === 'legendary').length / totalTracks) * 100;
   $: mythicPct = (unlockedTracks.filter((t) => t.rarityTier === 'mythic').length / totalTracks) * 100;
+
+  let isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+
+  function handleWindowKeyDown(e) {
+    if (e.key === 'Shift') {
+      isShiftActive = true;
+    }
+  }
+
+  function handleWindowKeyUp(e) {
+    if (e.key === 'Shift') {
+      isShiftActive = false;
+    }
+  }
+
+  onMount(() => {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleWindowKeyDown);
+      window.addEventListener('keyup', handleWindowKeyUp);
+      const mql = window.matchMedia('(max-width: 768px)');
+      isMobile = mql.matches;
+      const handleMediaChange = (e) => {
+        isMobile = e.matches;
+      };
+      mql.addEventListener('change', handleMediaChange);
+      return () => {
+        window.removeEventListener('keydown', handleWindowKeyDown);
+        window.removeEventListener('keyup', handleWindowKeyUp);
+        mql.removeEventListener('change', handleMediaChange);
+      };
+    }
+  });
 </script>
 
 <div class="game-hud-overlay" aria-label="Game HUD">
-  <!-- Top-Left Creator Watermark -->
-  <aside class="hud-top-left-watermark" aria-label="Creator Link">
+  <!-- SVG Filter for hand-drawn turbulence/boiling effect -->
+  <svg class="logout-filter-svg" width="0" height="0" style="position: absolute; pointer-events: none;">
+    <defs>
+      <filter id="boil-filter-1">
+        <feTurbulence type="fractalNoise" baseFrequency="0.04 0.08" numOctaves="2" result="noise" seed="1" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.5" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <filter id="boil-filter-2">
+        <feTurbulence type="fractalNoise" baseFrequency="0.05 0.09" numOctaves="2" result="noise" seed="15" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <filter id="boil-filter-3">
+        <feTurbulence type="fractalNoise" baseFrequency="0.04 0.07" numOctaves="2" result="noise" seed="30" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <filter id="boil-filter-4">
+        <feTurbulence type="fractalNoise" baseFrequency="0.06 0.08" numOctaves="2" result="noise" seed="45" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.8" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </defs>
+  </svg>
+
+  {#if isMobile}
+    <!-- Mobile Top App Bar -->
+    <header class="hud-mobile-top-bar" class:is-above-overlay={showOverlay} aria-label="Mobile Navigation and Player profile">
+      <div class="hud-brand-pill">
+        <button
+          class="hud-logo-mark"
+          id="btnSwitchAccount"
+          type="button"
+          aria-label="Hold to Switch Profile"
+          style="--hold-progress: {holdProgress};"
+          class:is-holding={isHolding}
+          bind:this={logoutBtnEl}
+          on:pointerenter={handlePointerEnter}
+          on:pointerdown={handleHoldStart}
+          on:pointerup={handleHoldEnd}
+          on:pointerleave={handlePointerLeave}
+          on:pointercancel={handlePointerLeave}
+          on:blur={handlePointerLeave}
+          on:keydown={handleKeyDown}
+          on:keyup={handleKeyUp}
+        >
+          <span class="logout-default-icon">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square" stroke-linejoin="miter" class="logout-lightning-icon" aria-hidden="true">
+              <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+              <line x1="12" y1="2" x2="12" y2="12" />
+            </svg>
+          </span>
+        </button>
+
+        <div class="hud-avatar-wrap">
+          {#if $userAvatarUrl}
+            <img class="hud-avatar-img" src={$userAvatarUrl} alt="User profile" />
+          {:else}
+            <div class="hud-avatar-placeholder">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+            </div>
+          {/if}
+        </div>
+
+        <div class="hud-brand-titles">
+          <div
+            class="hud-brand-title"
+            class:is-logout-state={brandDisplayState !== 'default'}
+            class:is-holding={brandDisplayState === 'holding'}
+            class:is-released={brandDisplayState === 'released'}
+          >
+            {#key brandDisplayState}
+              <div class="hud-brand-text-slide" transition:fade={{ duration: 100 }}>
+                {#if brandDisplayState === 'holding'}
+                  <span class="hud-brand-kaomoji">{currentHoldKaomoji}</span>
+                {:else if brandDisplayState === 'released'}
+                  <span class="hud-brand-kaomoji">{currentReleaseKaomoji}</span>
+                {:else}
+                  <span class="hud-brand-default-text">Track RNG</span>
+                  <span class="hud-beta-badge">BETA</span>
+                {/if}
+              </div>
+            {/key}
+          </div>
+          <div class="hud-brand-sub" id="hudAccountSub">
+            {$activeUserId || 'Username'} / {$rngTracks.length} Tracks
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Mastery Status Pill -->
+      <div class="hud-mobile-mastery-chip" aria-label="Collection Mastery">
+        <div class="mobile-mastery-row">
+          <span class="mobile-mastery-title">UNLOCKED</span>
+          <div class="mobile-mastery-counter">
+            <span id="hudMasteryVal" class="monolith-mastery-val" aria-label="{$unlockedCount}">
+              {#each masteryDigits as d (d.key)}
+                <span class="tally-digit-slot">
+                  <span class="tally-digit-char" class:is-rolling={d.hasChanged}>{d.char}</span>
+                </span>
+              {/each}
+            </span>
+            <span class="sep">/</span>
+            <span id="hudMasteryTotal">{$rngTracks.length}</span>
+          </div>
+          <span id="hudRolls" class="monolith-rolls-val mobile-rolls-tag">{$gameRolls}R</span>
+        </div>
+        <div class="monolith-rarity-track mobile-rarity-track">
+          {#if commonPct > 0}<div class="rarity-slice slice-common" style="width: {commonPct}%;"></div>{/if}
+          {#if uncommonPct > 0}<div class="rarity-slice slice-uncommon" style="width: {uncommonPct}%;"></div>{/if}
+          {#if rarePct > 0}<div class="rarity-slice slice-rare" style="width: {rarePct}%;"></div>{/if}
+          {#if epicPct > 0}<div class="rarity-slice slice-epic" style="width: {epicPct}%;"></div>{/if}
+          {#if legendaryPct > 0}<div class="rarity-slice slice-legendary" style="width: {legendaryPct}%;"></div>{/if}
+          {#if mythicPct > 0}<div class="rarity-slice slice-mythic" style="width: {mythicPct}%;"></div>{/if}
+        </div>
+      </div>
+    </header>
+
+    <!-- Mobile Bottom Navigation Bar (Dock) -->
+    <nav class="hud-mobile-nav-bar" aria-label="Mobile Navigation">
+      <button
+        class="mobile-nav-tab {$activeModal === null ? 'active' : ''}"
+        id="btnHudArena"
+        type="button"
+        aria-label="Arena roll screen"
+        on:click={handleCloseBinder}
+      >
+        <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="2" x2="12" y2="6" />
+          <line x1="12" y1="18" x2="12" y2="22" />
+          <line x1="2" y1="12" x2="6" y2="12" />
+          <line x1="18" y1="12" x2="22" y2="12" />
+        </svg>
+        <span class="mobile-nav-label">ARENA</span>
+      </button>
+
+      <button
+        class="mobile-nav-tab {$activeModal === 'binder' ? 'active' : ''}"
+        id="btnHudBinder"
+        type="button"
+        aria-label="Open Unlocked Track Catalogue"
+        on:click={handleOpenBinder}
+      >
+        <div class="mobile-nav-icon-wrap">
+          <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="0" ry="0" />
+            <line x1="3" y1="9" x2="21" y2="9" />
+            <line x1="9" y1="21" x2="9" y2="9" />
+          </svg>
+          {#if hasNewCard}
+            <span class="mobile-nav-badge" id="hudBinderNewBadge">+{newUnlockedCount}</span>
+          {/if}
+        </div>
+        <span class="mobile-nav-label">CATALOGUE</span>
+      </button>
+
+      <button
+        class="mobile-nav-tab {$activeModal === 'rates' ? 'active' : ''}"
+        id="btnHudRates"
+        type="button"
+        aria-label="View Rarity Probabilities"
+        on:click={handleOpenRates}
+      >
+        <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="18" y1="20" x2="18" y2="10" />
+          <line x1="12" y1="20" x2="12" y2="4" />
+          <line x1="6" y1="20" x2="6" y2="14" />
+        </svg>
+        <span class="mobile-nav-label">RATES</span>
+      </button>
+
+      <button
+        class="mobile-nav-tab {$activeModal === 'settings' ? 'active' : ''}"
+        id="btnHudSettings"
+        type="button"
+        aria-label="Game and Audio Settings"
+        on:click={handleOpenSettings}
+      >
+        <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+        <span class="mobile-nav-label">SETTINGS</span>
+      </button>
+    </nav>
+  {:else}
+    <!-- Top-Left Creator Watermark -->
+    <aside class="hud-top-left-watermark" aria-label="Creator Link">
     <a
       href="https://github.com/irfanjmdn"
       target="_blank"
@@ -508,27 +742,6 @@
         </span>
       </button>
 
-      <!-- SVG Filter for hand-drawn turbulence/boiling effect -->
-      <svg class="logout-filter-svg" width="0" height="0" style="position: absolute; pointer-events: none;">
-        <defs>
-          <filter id="boil-filter-1">
-            <feTurbulence type="fractalNoise" baseFrequency="0.04 0.08" numOctaves="2" result="noise" seed="1" />
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.5" xChannelSelector="R" yChannelSelector="G" />
-          </filter>
-          <filter id="boil-filter-2">
-            <feTurbulence type="fractalNoise" baseFrequency="0.05 0.09" numOctaves="2" result="noise" seed="15" />
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
-          </filter>
-          <filter id="boil-filter-3">
-            <feTurbulence type="fractalNoise" baseFrequency="0.04 0.07" numOctaves="2" result="noise" seed="30" />
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2" xChannelSelector="R" yChannelSelector="G" />
-          </filter>
-          <filter id="boil-filter-4">
-            <feTurbulence type="fractalNoise" baseFrequency="0.06 0.08" numOctaves="2" result="noise" seed="45" />
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.8" xChannelSelector="R" yChannelSelector="G" />
-          </filter>
-        </defs>
-      </svg>
       <div class="hud-avatar-wrap">
         {#if $userAvatarUrl}
           <img class="hud-avatar-img" src={$userAvatarUrl} alt="User profile" />
@@ -693,6 +906,7 @@
       </div>
     </div>
   </aside>
+  {/if}
 
   <!-- Hold-to-logout red circle overlay -->
   {#if showOverlay}
