@@ -20,6 +20,7 @@ import {
 } from './store.js';
 import { getAudioContext } from './audio.js';
 import { loadLastfmCrateClient } from './modes/lastfmEngine.js';
+import { loadSoundCloudCrateClient } from './modes/soundcloudEngine.js';
 import { loadSpotifyCrateClient, loadStaticDemoCrate } from './modes/spotifyEngine.js';
 
 /**
@@ -98,6 +99,15 @@ export async function fetchAndBuildCrate(inputStr, mode = 'lastfm', forceRefresh
     }
     appendLog(`Initiating Last.fm request for user: ${lastfmUser}`, 'system');
     await loadLastfmCrateClient(lastfmUser, onEvent, forceRefresh);
+  } else if (mode === 'soundcloud') {
+    let scUser = cleanInput;
+    if (scUser.toLowerCase().includes('soundcloud.com/')) {
+      scUser = scUser.split('soundcloud.com/')[1].split('/')[0].split('?')[0].trim();
+    } else if (scUser.startsWith('soundcloud:')) {
+      scUser = scUser.split(':').pop().trim();
+    }
+    appendLog(`Initiating SoundCloud request for user: ${scUser}`, 'system');
+    await loadSoundCloudCrateClient(scUser, onEvent, forceRefresh);
   } else {
     appendLog(`Initiating Spotify request for input: ${cleanInput}`, 'system');
     await loadSpotifyCrateClient(cleanInput, forceRefresh, onEvent);

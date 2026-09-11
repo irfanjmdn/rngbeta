@@ -76,12 +76,17 @@ export function connectMediaElement(audioEl, isArena = false) {
 
     // 1. Audible playback routing
     if (isArena) {
-      const lowpass = getArenaLowpassNode();
-      if (lowpass) {
-        source.connect(lowpass);
+      const declickNode = getArenaDeclickGainNode();
+      if (declickNode) {
+        source.connect(declickNode);
       } else {
-        const dest = getAudioDestinationNode();
-        if (dest) source.connect(dest);
+        const lowpass = getArenaLowpassNode();
+        if (lowpass) {
+          source.connect(lowpass);
+        } else {
+          const dest = getAudioDestinationNode();
+          if (dest) source.connect(dest);
+        }
       }
     } else {
       const musicBus = getMusicBusNode() || getAudioDestinationNode();
@@ -351,6 +356,90 @@ export function fadeInMusic(durationSec = 0.15) {
   setMusicFadeLevel(1.0, durationSec);
 }
 
+let arenaDeclickGainNode = null;
+let declickResumeTimer = null;
+
+export function getArenaDeclickGainNode() {
+  const ctx = getAudioContext();
+  if (!ctx) return null;
+  if (!arenaDeclickGainNode) {
+    try {
+      arenaDeclickGainNode = ctx.createGain();
+      arenaDeclickGainNode.gain.setValueAtTime(1.0, ctx.currentTime);
+
+      const lowpass = getArenaLowpassNode();
+      const dest = getAudioDestinationNode() || ctx.destination;
+      if (lowpass) {
+        arenaDeclickGainNode.connect(lowpass);
+      } else if (dest) {
+        arenaDeclickGainNode.connect(dest);
+      }
+    } catch (e) {
+      return null;
+    }
+  }
+  return arenaDeclickGainNode;
+}
+
+/**
+ * Zero-crossing micro-envelope declicker for audio seeking.
+ * Applies a 4ms micro-fade down before repositioning playhead, then ramps
+ * back to full amplitude in 14ms. Eliminates DC offset clicks and waveform discontinuities.
+ */
+export function declickAudioSeek(audioEl, targetTime, isExact = false) {
+  if (!audioEl) return;
+  const ctx = getAudioContext();
+  const declickNode = getArenaDeclickGainNode();
+
+  // Direct seek when paused, uninitialized, or suspended
+  if (!ctx || !declickNode || audioEl.paused || ctx.state === 'suspended') {
+    try {
+      if (!isExact && typeof audioEl.fastSeek === 'function') {
+        audioEl.fastSeek(targetTime);
+      } else {
+        audioEl.currentTime = targetTime;
+      }
+    } catch (e) {
+      audioEl.currentTime = targetTime;
+    }
+    return;
+  }
+
+  const now = ctx.currentTime;
+
+  if (declickResumeTimer) {
+    clearTimeout(declickResumeTimer);
+    declickResumeTimer = null;
+  }
+
+  // Ultra-fast 4ms linear ramp down to near-zero (smooth windowing, kills pop)
+  declickNode.gain.cancelScheduledValues(now);
+  declickNode.gain.setValueAtTime(Math.max(0.0001, declickNode.gain.value), now);
+  declickNode.gain.linearRampToValueAtTime(0.0001, now + 0.004);
+
+  // Perform seek at zero amplitude dip
+  declickResumeTimer = setTimeout(() => {
+    try {
+      if (!isExact && typeof audioEl.fastSeek === 'function') {
+        audioEl.fastSeek(targetTime);
+      } else {
+        audioEl.currentTime = targetTime;
+      }
+    } catch (e) {
+      audioEl.currentTime = targetTime;
+    }
+
+    // Micro-ramp back up to 1.0 over 14ms (smooth attack, zero click)
+    if (ctx && ctx.state !== 'closed') {
+      const resumeTime = ctx.currentTime;
+      declickNode.gain.cancelScheduledValues(resumeTime);
+      declickNode.gain.setValueAtTime(0.0001, resumeTime);
+      declickNode.gain.exponentialRampToValueAtTime(1.0, resumeTime + 0.014);
+    }
+    declickResumeTimer = null;
+  }, 4);
+}
+
 let arenaLowpassNode = null;
 let arenaReverbConvolver = null;
 let arenaReverbWetGain = null;
@@ -567,6 +656,50 @@ export function playPointerSeekSound() {
       osc.stop(now + 0.095);
     } catch (e) {}
   }
+}
+
+let lastJogSoundTime = 0;
+export function playJogDialSound(isForward = true) {
+  if (sfxVolume <= 0) return;
+  const nowMs = performance.now();
+  const timeSinceLast = nowMs - lastJogSoundTime;
+  if (timeSinceLast < 32) return; // Smooth throttle to maintain acoustic clarity
+  lastJogSoundTime = nowMs;
+
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    // Velocity-aware frequency shift: faster spins produce slightly brighter micro-detents
+    const speedMultiplier = 1 + Math.max(0, Math.min(0.4, (90 - Math.min(90, timeSinceLast)) / 180));
+    const baseFreq = (isForward ? 560 : 440) * speedMultiplier;
+    const endFreq = (isForward ? 680 : 380) * speedMultiplier;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.012);
+
+    // Warm lowpass filter to remove harsh digital transients
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2200, now);
+
+    // Smooth envelope: 1.5ms micro-attack to avoid clicks, 12ms exponential fade
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.035 * sfxVolume, now + 0.0015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.013);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(getAudioDestinationNode() || ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.014);
+  } catch (e) {}
 }
 
 export function playMechanicalBrakeSound() {

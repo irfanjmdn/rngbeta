@@ -31,6 +31,16 @@ export const isArenaPlaying = writable(false);
 export const isBinderPlaying = writable(false);
 export const arenaAudioTime = writable({ current: 0, duration: 30 });
 export const binderAudioTime = writable({ current: 0, duration: 30 });
+export const unplayableTrackIds = writable(new Set());
+
+export function markTrackUnplayable(trackId) {
+  if (!trackId) return;
+  unplayableTrackIds.update((set) => {
+    const next = new Set(set);
+    next.add(trackId);
+    return next;
+  });
+}
 
 export const debugLogs = writable([
   { level: 'system', message: 'Ready. Enter a Spotify profile URL and click \'Fetch & Build Crate\'.' }

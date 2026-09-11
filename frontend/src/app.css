@@ -175,6 +175,11 @@ body {
   color: #F43F5E;
 }
 
+.source-tab-btn.is-active.is-soundcloud {
+  background: rgba(255, 85, 0, 0.16);
+  color: #FF5500;
+}
+
 .source-tab-btn.is-active.is-spotify {
   background: rgba(16, 185, 129, 0.16);
   color: #10B981;
@@ -230,7 +235,7 @@ body {
 
 .mode-select-container {
   width: 100%;
-  max-width: 680px;
+  max-width: 840px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -266,15 +271,15 @@ body {
 
 .mode-select-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   width: 100%;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .mode-select-grid {
     grid-template-columns: 1fr;
-    max-width: 320px;
+    max-width: 340px;
   }
 }
 
@@ -309,6 +314,10 @@ body {
   border-color: rgba(225, 29, 72, 0.45);
 }
 
+.mode-card-soundcloud:hover {
+  border-color: rgba(255, 85, 0, 0.45);
+}
+
 .mode-card-spotify:hover {
   border-color: rgba(16, 185, 129, 0.45);
 }
@@ -319,6 +328,11 @@ body {
 
 .mode-card-lastfm:focus-visible {
   outline: 2px solid #E11D48;
+  outline-offset: 3px;
+}
+
+.mode-card-soundcloud:focus-visible {
+  outline: 2px solid #FF5500;
   outline-offset: 3px;
 }
 
@@ -344,6 +358,12 @@ body {
   border: 1px solid rgba(225, 29, 72, 0.24);
 }
 
+.cradle-soundcloud {
+  background: rgba(255, 85, 0, 0.12);
+  color: #FF5500;
+  border: 1px solid rgba(255, 85, 0, 0.24);
+}
+
 .cradle-spotify {
   background: rgba(16, 185, 129, 0.12);
   color: #10B981;
@@ -356,6 +376,10 @@ body {
 
 .mode-card-lastfm:hover .cradle-lastfm {
   border-color: rgba(227, 27, 35, 0.45);
+}
+
+.mode-card-soundcloud:hover .cradle-soundcloud {
+  border-color: rgba(255, 85, 0, 0.45);
 }
 
 .mode-card-spotify:hover .cradle-spotify {
@@ -443,7 +467,7 @@ body {
 
 .recent-profiles-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 6px;
   width: 100%;
 }
@@ -451,9 +475,9 @@ body {
 .recent-profile-card {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   height: 38px;
-  padding: 0 10px;
+  padding: 0 8px;
   background: #0C1018;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
@@ -506,31 +530,55 @@ body {
   flex-shrink: 0;
 }
 
-.recent-platform-icon {
+.recent-platform-icon,
+.recent-avatar-wrap {
   width: 22px;
   height: 22px;
+  background: #141B28;
   border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.recent-avatar-img,
+.recent-platform-icon .recent-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+}
+
+.recent-avatar-initial {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  color: #94A3B8;
+  line-height: 1;
+}
+
+.recent-platform-indicator {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
+.recent-platform-indicator.platform-lastfm,
 .recent-platform-icon.platform-lastfm {
-  background: rgba(225, 29, 72, 0.15);
   color: #F43F5E;
 }
 
-.recent-platform-icon.platform-spotify {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10B981;
+.recent-platform-indicator.platform-soundcloud,
+.recent-platform-icon.platform-soundcloud {
+  color: #FF5500;
 }
 
-.recent-platform-icon .recent-avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 0;
+.recent-platform-indicator.platform-spotify,
+.recent-platform-icon.platform-spotify {
+  color: #10B981;
 }
 
 .recent-profile-name {
@@ -686,6 +734,11 @@ body {
   transition: background 0.15s, transform 0.12s;
 }
 
+.input-profile-soundcloud:focus {
+  border-color: #FFFFFF;
+  box-shadow: 0 0 0 1px #FFFFFF;
+}
+
 .btn-build-lastfm {
   background: #E11D48;
   color: #FFFFFF;
@@ -697,6 +750,20 @@ body {
 
 .btn-build-lastfm:focus-visible {
   outline: 2px solid #E11D48;
+  outline-offset: 2px;
+}
+
+.btn-build-soundcloud {
+  background: #FF5500;
+  color: #FFFFFF;
+}
+
+.btn-build-soundcloud:hover {
+  background: #E04B00;
+}
+
+.btn-build-soundcloud:focus-visible {
+  outline: 2px solid #FF5500;
   outline-offset: 2px;
 }
 
@@ -3490,6 +3557,170 @@ body {
 .winner-art-wrap:hover .winner-art-hover-overlay,
 .winner-art-wrap:focus-visible .winner-art-hover-overlay {
   opacity: 1;
+}
+
+/* While jog scrubbing, hide play/pause button overlay so HUD takes center focus */
+.winner-spotlight-box.is-jog-scrubbing .winner-art-hover-overlay {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+
+/* Distilled Hardware Jog Scrub HUD Overlay */
+.winner-jog-hud-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 10px 10px;
+  background: rgba(6, 9, 14, 0.92);
+  backdrop-filter: blur(12px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md, 8px);
+  pointer-events: none;
+  animation: jogHudFadeIn 0.12s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes jogHudFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Top Row: Minimal Telemetry Delta Chip */
+.jog-hud-top-bar {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.jog-hud-delta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--font-display, 'Unbounded', sans-serif);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.jog-hud-delta-pill.forward {
+  color: #10B981;
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.jog-hud-delta-pill.backward {
+  color: #F59E0B;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.jog-hud-delta-dir {
+  font-size: 8px;
+  opacity: 0.75;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+/* Hero Timestamp Display */
+.jog-hud-time-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.jog-hud-time-current {
+  font-family: var(--font-display, 'Unbounded', sans-serif);
+  font-size: 22px;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.jog-hud-time-total {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748B;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Precision Hairline Progress Gauge */
+.jog-hud-gauge-wrap {
+  width: 100%;
+  padding: 0 4px;
+}
+
+.jog-hud-gauge-track {
+  position: relative;
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  overflow: visible;
+}
+
+.jog-hud-gauge-fill {
+  height: 100%;
+  border-radius: 999px;
+  box-shadow: 0 0 8px currentColor;
+  transition: width 0.04s linear;
+}
+
+.jog-hud-gauge-bead {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.8), 0 0 6px rgba(255, 255, 255, 0.9);
+  transition: left 0.04s linear;
+}
+
+/* Scrubber feedback when actively wheel-jogging */
+.audio-scrub-track.is-jogging {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.audio-scrub-track.is-jogging .audio-scrub-fill {
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.85);
+}
+
+.audio-scrub-track.is-jogging .audio-scrub-thumb {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.35);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 12px rgba(52, 211, 153, 0.85);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .winner-jog-hud-overlay,
+  .jog-hud-gauge-fill,
+  .jog-hud-gauge-bead {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 .winner-playlist-badge {
@@ -6684,4 +6915,84 @@ a.meta-tag.source-tag:hover strong {
   gap: 8px;
   margin-left: auto;
 }
+
+/* Screen Size Warning Overlay (Display notice for small screens / mobile) */
+.screen-warning-overlay {
+  display: none;
+}
+
+@media (max-width: 768px), (max-height: 520px) {
+  .screen-warning-overlay {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    background: rgba(6, 9, 14, 0.94);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+}
+
+.screen-warning-card {
+  max-width: 340px;
+  width: 100%;
+  background: #0C1018;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  padding: 28px 22px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.screen-warning-icon {
+  color: #F59E0B;
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
+.screen-warning-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #F8FAFC;
+  margin: 0 0 10px 0;
+  line-height: 1.25;
+}
+
+.screen-warning-desc {
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0 0 20px 0;
+  max-width: 280px;
+}
+
+.btn-screen-dismiss {
+  width: 100%;
+  height: 38px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #F8FAFC;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.12s ease-out, border-color 0.12s ease-out;
+}
+
+.btn-screen-dismiss:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
 

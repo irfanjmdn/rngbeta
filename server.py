@@ -17,6 +17,7 @@ import time
 import functools
 import statistics
 import hashlib
+from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(BASE_DIR, "dist")
@@ -649,6 +650,325 @@ def handle_lastfm_fetch(profile_url, send_event, log_msg):
 
 
 # ==============================================================================
+# SECTION: SOUNDCLOUD STREAM HANDLER (ISOLATED)
+# ==============================================================================
+SOUNDCLOUD_STREAM_CACHE = {}
+LATEST_SOUNDCLOUD_CLIENT_ID = "Pb72ranhoyt6gw7hM7TkzUItXlMWSNSo"
+
+
+def extract_soundcloud_username(input_str):
+    """Extract clean SoundCloud username from URL or raw input."""
+    raw = (input_str or "").strip()
+    if "soundcloud.com/" in raw:
+        parts = raw.split("soundcloud.com/")[1].split("?")[0].split("/")
+        return parts[0].strip()
+    if raw.startswith("soundcloud:"):
+        return raw.split(":")[-1].strip()
+    return raw.split("?")[0].strip()
+
+
+def refresh_soundcloud_client_id():
+    """Scrape a fresh client_id from soundcloud.com when credentials expire."""
+    global LATEST_SOUNDCLOUD_CLIENT_ID
+    try:
+        req = urllib.request.Request("https://soundcloud.com/discover", headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+        m = re.search(r"window\.__sc_hydration\s*=\s*(\[.*?\]);</script>", html, re.DOTALL)
+        if m:
+            data = json.loads(m.group(1))
+            for item in data:
+                if item.get("hydratable") == "apiClient":
+                    cid = item.get("data", {}).get("id")
+                    if cid:
+                        LATEST_SOUNDCLOUD_CLIENT_ID = cid
+                        return cid
+    except Exception:
+        pass
+    return LATEST_SOUNDCLOUD_CLIENT_ID
+
+
+def resolve_soundcloud_profile(username, sse_log_fn=None):
+    """Scrape user ID, display name, avatar, and active client_id from SoundCloud profile."""
+    global LATEST_SOUNDCLOUD_CLIENT_ID
+    url = f"https://soundcloud.com/{username}/likes"
+    req = urllib.request.Request(url, headers=HEADERS)
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+    except Exception as e:
+        if sse_log_fn:
+            sse_log_fn(f"Could not load SoundCloud page for '{username}': {e}", "warning")
+        return LATEST_SOUNDCLOUD_CLIENT_ID, None
+
+    m = re.search(r"window\.__sc_hydration\s*=\s*(\[.*?\]);</script>", html, re.DOTALL)
+    if not m:
+        return LATEST_SOUNDCLOUD_CLIENT_ID, None
+
+    try:
+        data = json.loads(m.group(1))
+    except Exception:
+        return LATEST_SOUNDCLOUD_CLIENT_ID, None
+
+    client_id = LATEST_SOUNDCLOUD_CLIENT_ID
+    user_info = None
+    for item in data:
+        if item.get("hydratable") == "apiClient":
+            cid = item.get("data", {}).get("id")
+            if cid:
+                client_id = cid
+                LATEST_SOUNDCLOUD_CLIENT_ID = cid
+        elif item.get("hydratable") == "user":
+            user_info = item.get("data")
+
+    return client_id, user_info
+
+
+def fetch_soundcloud_likes(user_id, client_id, sse_log_fn=None, max_pages=3):
+    """Fetch liked tracks from SoundCloud API v2 using cursor pagination."""
+    headers = dict(HEADERS)
+    url = f"https://api-v2.soundcloud.com/users/{user_id}/likes?limit=100&client_id={client_id}"
+    all_items = []
+    page = 1
+
+    while url and page <= max_pages:
+        if sse_log_fn:
+            sse_log_fn(f"Fetching liked tracks from SoundCloud (batch {page}/{max_pages})...", "info")
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            items = data.get("collection", [])
+            all_items.extend(items)
+            next_href = data.get("next_href")
+            if next_href and len(items) > 0:
+                if "client_id=" not in next_href:
+                    sep = "&" if "?" in next_href else "?"
+                    next_href += f"{sep}client_id={client_id}"
+                url = next_href
+                page += 1
+                time.sleep(0.1)
+            else:
+                break
+        except Exception as e:
+            if sse_log_fn:
+                sse_log_fn(f"Notice while fetching likes batch {page}: {e}", "warning")
+            break
+
+    return all_items
+
+
+def compute_soundcloud_rarity_tracks(likes_data, username, user_id, client_id, user_avatar=None):
+    """Format liked tracks into Crate RNG cards ranked by like age (oldest = Mythic)."""
+    track_map = {}
+    for item in likes_data:
+        t = item.get("track")
+        if not t or not isinstance(t, dict):
+            continue
+
+        title = (t.get("title") or "").strip()
+        u = t.get("user") or {}
+        artist = (u.get("username") or "").strip()
+        t_id = t.get("id")
+        if not title or not artist or not t_id:
+            continue
+
+        created_at_str = item.get("created_at") or t.get("created_at") or ""
+        liked_ts = 0
+        liked_date_text = "Past like"
+        if created_at_str:
+            try:
+                clean_iso = created_at_str.replace("Z", "+00:00")
+                dt = datetime.fromisoformat(clean_iso)
+                liked_ts = dt.timestamp()
+                liked_date_text = dt.strftime("%b %d, %Y")
+            except Exception:
+                liked_date_text = created_at_str[:10]
+
+        raw_art = t.get("artwork_url") or u.get("avatar_url") or ""
+        cover_url = raw_art.replace("-large.", "-t500x500.") if raw_art else ""
+
+        # Locate progressive audio transcoding for direct MP3 playback
+        media = t.get("media") or {}
+        transcodings = media.get("transcodings") or []
+        prog_tc = None
+        for tc in transcodings:
+            fmt = tc.get("format") or {}
+            if fmt.get("protocol") == "progressive":
+                prog_tc = tc.get("url")
+                break
+
+        preview_url = ""
+        if prog_tc:
+            preview_url = f"/api/soundcloud/stream?url={urllib.parse.quote(prog_tc)}&client_id={client_id}"
+
+        key = str(t_id)
+        if key not in track_map:
+            track_map[key] = {
+                "t_id": t_id,
+                "title": title,
+                "artist": artist,
+                "liked_ts": liked_ts,
+                "liked_date_text": liked_date_text,
+                "cover_url": cover_url or user_avatar or "",
+                "permalink_url": t.get("permalink_url") or f"https://soundcloud.com/{username}",
+                "preview_url": preview_url,
+                "playback_count": t.get("playback_count") or 0,
+            }
+
+    unique_tracks = list(track_map.values())
+    if not unique_tracks:
+        return [], {"mythic": 0, "legendary": 0, "epic": 0, "rare": 0, "uncommon": 0, "common": 0}
+
+    # Sort ascending by liked timestamp: oldest like = rank 0 = Mythic, newest = Common
+    unique_tracks.sort(key=lambda x: x["liked_ts"])
+
+    total = len(unique_tracks)
+    tier_target_probs = {
+        "mythic": 0.005,
+        "legendary": 0.025,
+        "epic": 0.070,
+        "rare": 0.140,
+        "uncommon": 0.260,
+        "common": 0.500,
+    }
+
+    tier_counts = {"mythic": 0, "legendary": 0, "epic": 0, "rare": 0, "uncommon": 0, "common": 0}
+    temp_specs = []
+    for rank in range(total):
+        pct = (rank + 0.5) / max(1, total)
+        if pct <= 0.012:
+            tier, name, color, odds, t_pct = "mythic", "Mythic", "#F43F5E", 200, pct / 0.012
+        elif pct <= 0.045:
+            tier, name, color, odds, t_pct = "legendary", "Legendary", "#F59E0B", 40, (pct - 0.012) / (0.045 - 0.012)
+        elif pct <= 0.125:
+            tier, name, color, odds, t_pct = "epic", "Epic", "#A855F7", 14, (pct - 0.045) / (0.125 - 0.045)
+        elif pct <= 0.28:
+            tier, name, color, odds, t_pct = "rare", "Rare", "#3B82F6", 7, (pct - 0.125) / (0.28 - 0.125)
+        elif pct <= 0.55:
+            tier, name, color, odds, t_pct = "uncommon", "Uncommon", "#10B981", 4, (pct - 0.28) / (0.55 - 0.28)
+        else:
+            tier, name, color, odds, t_pct = "common", "Common", "#94A3B8", 2, (pct - 0.55) / (1.0 - 0.55)
+        tier_counts[tier] += 1
+        temp_specs.append((tier, name, color, odds, t_pct))
+
+    all_tracks = []
+    for i, t in enumerate(unique_tracks):
+        tier, name, color, odds, t_pct = temp_specs[i]
+        count = max(1, tier_counts[tier])
+        target_prob = tier_target_probs[tier]
+        pool_weight = 100000.0 * target_prob
+        fine_mod = 0.85 + (0.30 * (1.0 - t_pct))
+        track_weight = max(1, int(round((pool_weight / count) * fine_mod)))
+        drop_chance_str = f"1 in {odds:,}"
+
+        track_id = f"soundcloud:{user_id}:{t['t_id']}"
+        all_tracks.append({
+            "id": track_id,
+            "spotify_id": "",
+            "title": t["title"],
+            "artist": t["artist"],
+            "album_cover_url": t["cover_url"],
+            "playlist_cover_url": user_avatar or t["cover_url"],
+            "cover_url": t["cover_url"],
+            "playlist_name": f"Liked on: {t['liked_date_text']}",
+            "playlist_id": f"soundcloud_{user_id}",
+            "playlist_uri": "",
+            "playlist_url": f"https://soundcloud.com/{username}/likes",
+            "preview_url": t["preview_url"],
+            "uri": t["permalink_url"],
+            "spotify_url": t["permalink_url"],
+            "source": "soundcloud",
+            "source_url": t["permalink_url"],
+            "rarityTier": tier,
+            "rarityName": name,
+            "rarityColor": color,
+            "dropChance": drop_chance_str,
+            "weight": track_weight,
+            "release_date": "",
+        })
+
+    return all_tracks, tier_counts
+
+
+def handle_soundcloud_fetch(profile_url, send_event, log_msg, force_refresh=False):
+    """Handle SoundCloud liked tracks crate construction and SSE streaming."""
+    username = extract_soundcloud_username(profile_url)
+    if not username:
+        send_event({"type": "error", "message": "Invalid SoundCloud username or profile URL."})
+        return
+
+    log_msg(f"Target SoundCloud User: {username}", "info")
+    cache_file = os.path.join(DATA_DIR, f"cache_soundcloud_{username.lower()}.json")
+
+    if not force_refresh and os.path.exists(cache_file):
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            if cached.get("tracks"):
+                log_msg(f"Loaded {len(cached['tracks'])} tracks from server cache for '{username}'.", "success")
+                log_msg("Crate RNG initialized. Ready to roll!", "success")
+                send_event(cached)
+                return
+        except Exception:
+            pass
+
+    log_msg(f"Resolving profile and active session keys for '{username}'...", "info")
+    client_id, user_info = resolve_soundcloud_profile(username, sse_log_fn=lambda m, lvl="info": log_msg(m, lvl))
+    if not user_info:
+        send_event({"type": "error", "message": f"Could not find public profile for SoundCloud user '{username}'."})
+        return
+
+    display_name = user_info.get("username") or username
+    user_id = user_info.get("id")
+    avatar_url = user_info.get("avatar_url")
+    likes_count = user_info.get("likes_count", 0)
+
+    log_msg(f"Found SoundCloud user '{display_name}' ({likes_count:,} public likes).", "success")
+    if likes_count == 0:
+        send_event({"type": "error", "message": f"User '{display_name}' does not have any public liked songs."})
+        return
+
+    likes_data = fetch_soundcloud_likes(user_id, client_id, sse_log_fn=lambda m, lvl="info": log_msg(m, lvl), max_pages=3)
+    if not likes_data:
+        send_event({"type": "error", "message": f"No liked tracks could be retrieved for '{display_name}'."})
+        return
+
+    log_msg(f"Retrieved {len(likes_data)} liked tracks. Analyzing like age timeline (oldest = Mythic)...", "info")
+    sc_tracks, tier_counts = compute_soundcloud_rarity_tracks(likes_data, username, user_id, client_id, user_avatar=avatar_url)
+
+    if not sc_tracks:
+        send_event({"type": "error", "message": "Failed to compile crate tracks from likes."})
+        return
+
+    log_msg(f"Library compiled: {len(sc_tracks)} unique tracks from SoundCloud likes.", "success")
+    log_msg(
+        f"Rarity Distribution -> Mythic: {tier_counts['mythic']}, Legendary: {tier_counts['legendary']}, Epic: {tier_counts['epic']}, Rare: {tier_counts['rare']}, Uncommon: {tier_counts['uncommon']}, Common: {tier_counts['common']}",
+        "info"
+    )
+    log_msg("Crate RNG initialized. Ready to roll!", "success")
+
+    payload = {
+        "type": "ready",
+        "userId": display_name,
+        "rawUserId": username,
+        "avatarUrl": avatar_url,
+        "playlistsCount": 1,
+        "tracksCount": len(sc_tracks),
+        "tracks": sc_tracks,
+        "distribution": tier_counts,
+    }
+
+    try:
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+    except Exception:
+        pass
+
+    send_event(payload)
+
+
+# ==============================================================================
 # SECTION: SPOTIFY STREAM HANDLER (ISOLATED)
 # ==============================================================================
 def handle_spotify_fetch(profile_input, send_event, log_msg, force_refresh=False):
@@ -914,6 +1234,76 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body)
+        if self.path.startswith("/api/soundcloud/stream"):
+            query_str = self.path.split("?", 1)[1] if "?" in self.path else ""
+            params = urllib.parse.parse_qs(query_str)
+            tc_url = params.get("url", [""])[0]
+            cid = params.get("client_id", [""])[0] or LATEST_SOUNDCLOUD_CLIENT_ID
+            if not tc_url:
+                self.send_response(400)
+                self.end_headers()
+                return
+
+            cache_key = f"{tc_url}:{cid}"
+            stream_mp3 = SOUNDCLOUD_STREAM_CACHE.get(cache_key)
+            if not stream_mp3:
+                for attempt in range(2):
+                    try:
+                        sep = "&" if "?" in tc_url else "?"
+                        target = f"{tc_url}{sep}client_id={cid}"
+                        s_req = urllib.request.Request(target, headers=HEADERS)
+                        with urllib.request.urlopen(s_req, timeout=8) as s_resp:
+                            s_data = json.loads(s_resp.read().decode("utf-8"))
+                            stream_mp3 = s_data.get("url")
+                            if stream_mp3:
+                                SOUNDCLOUD_STREAM_CACHE[cache_key] = stream_mp3
+                                break
+                    except urllib.error.HTTPError as e:
+                        if e.code in (401, 403) and attempt == 0:
+                            cid = refresh_soundcloud_client_id()
+                            cache_key = f"{tc_url}:{cid}"
+                            continue
+                        self.send_response(502)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"error": f"HTTP {e.code}: {e.reason}"}).encode("utf-8"))
+                        return
+                    except Exception as e:
+                        self.send_response(502)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
+                        return
+
+            if not stream_mp3:
+                self.send_response(404)
+                self.end_headers()
+                return
+
+            if ".m3u8" in stream_mp3 or "/hls" in stream_mp3:
+                self.send_response(415)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "HLS stream unsupported in direct player"}).encode("utf-8"))
+                return
+
+            accept = self.headers.get("Accept", "")
+            if "application/json" in accept and "audio/" not in accept:
+                body = json.dumps({"url": stream_mp3}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_response(302)
+                self.send_header("Location", stream_mp3)
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
             return
 
         super().do_GET()
@@ -939,7 +1329,14 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
             user_id = extract_user_id(profile_url)
 
 
-            mode = payload.get("mode", "lastfm" if "last.fm" in profile_url.lower() or profile_url.startswith("lastfm:") else "spotify")
+            mode = payload.get("mode")
+            if not mode:
+                if "last.fm" in profile_url.lower() or profile_url.startswith("lastfm:"):
+                    mode = "lastfm"
+                elif "soundcloud" in profile_url.lower() or profile_url.startswith("soundcloud:"):
+                    mode = "soundcloud"
+                else:
+                    mode = "spotify"
 
             # Start SSE Stream
             self.send_response(200)
@@ -962,6 +1359,8 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
 
             if mode == "lastfm":
                 handle_lastfm_fetch(profile_url, send_event, log_msg)
+            elif mode == "soundcloud":
+                handle_soundcloud_fetch(profile_url, send_event, log_msg, force_refresh)
             else:
                 handle_spotify_fetch(profile_url, send_event, log_msg, force_refresh)
             return

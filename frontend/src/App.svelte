@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import {
+    activeMode,
     isCrateReady,
     isSpinning,
     isAutoRolling,
@@ -17,6 +18,8 @@
     isLoggingOut,
     isRollNudgeActive,
     isRollShimmerActive,
+    markTrackUnplayable,
+    unplayableTrackIds,
   } from './lib/store.js';
 
   import Onboarding from './components/Onboarding.svelte';
@@ -34,22 +37,29 @@
     fadeInMusic,
     getAudioContext,
     playLogoutSquareSound,
+    declickAudioSeek,
   } from './lib/audio.js';
   import { fetchTrackPreview } from './lib/artCache.js';
 
-  let hasAgreedToDesktopNotice = typeof sessionStorage !== 'undefined'
-    ? sessionStorage.getItem('desktopNoticeAgreed') === '1'
-    : false;
+  let windowWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  let windowHeight = typeof window !== 'undefined' ? window.innerHeight : 768;
+  let hasDismissedSmallScreenWarning = false;
+
+  $: isWindowTooSmall = windowWidth > 0 && (windowWidth <= 768 || windowHeight <= 500);
+
+  // Whenever window expands to normal desktop size, reset dismissed flag so it warns again on future shrinkage
+  $: if (!isWindowTooSmall) {
+    hasDismissedSmallScreenWarning = false;
+  }
+
+  $: showScreenWarning = isWindowTooSmall && !hasDismissedSmallScreenWarning;
 
   let isInitialLoading = true;
   let isHidingSplash = false;
 
-  function handleAgreeNotice() {
+  function handleDismissScreenWarning() {
     playLogoutSquareSound(1);
-    hasAgreedToDesktopNotice = true;
-    if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem('desktopNoticeAgreed', '1');
-    }
+    hasDismissedSmallScreenWarning = true;
   }
 
   let reelComponent;
@@ -171,7 +181,13 @@
         activeEl.src = url;
       }
       activeEl.currentTime = startTime;
-      activeEl.play().catch(() => isArenaPlaying.set(false));
+      activeEl.play().catch(() => {
+        isArenaPlaying.set(false);
+        const track = $activeArenaTrack || $activeWinnerCard;
+        if (track?.id) {
+          markTrackUnplayable(track.id);
+        }
+      });
     } catch (e) {
       isArenaPlaying.set(false);
     }
@@ -212,11 +228,13 @@
     if (nextEl.src !== curEl.src) {
       nextEl.src = curEl.src;
     }
+    connectMediaElement(nextEl, true);
     nextEl.currentTime = 0;
     nextEl.volume = 0;
     nextEl.play().then(() => {
       activeArenaPlayerId = activeArenaPlayerId === 'A' ? 'B' : 'A';
       isTransitioningToLoop = false;
+      isArenaPlaying.set(true);
       const nextFade = rampAudioVolume(nextEl, 0.18, 600);
       if (activeArenaPlayerId === 'A') {
         arenaFadeInterval = nextFade;
@@ -230,14 +248,17 @@
     let track = $activeArenaTrack || $activeWinnerCard;
     const activeEl = getActiveArenaEl();
     if (!activeEl || !track) return;
+    if ($unplayableTrackIds.has(track.id)) return;
 
     if (!track.preview_url) {
       fetchTrackPreview(track).then((pUrl) => {
-        if (pUrl) {
+        if (pUrl && !$unplayableTrackIds.has(track.id)) {
           track.preview_url = pUrl;
           activeArenaTrack.set(track);
           activeWinnerCard.set(track);
           playArenaAudio(pUrl, 0, false);
+        } else if (!pUrl) {
+          markTrackUnplayable(track.id);
         }
       });
       return;
@@ -259,14 +280,54 @@
     }
   }
 
-  function seekArenaAudio(ratio) {
+  function handleArenaAudioError(playerId) {
+    const track = $activeArenaTrack || $activeWinnerCard;
+    if (track?.id) {
+      markTrackUnplayable(track.id);
+    }
+    isArenaPlaying.set(false);
+
+    // If Auto-Roll is enabled in "on_track_end" mode, advance to next track after a brief 2.5s pause
+    if ($isAutoRolling && $autoRollMode === 'on_track_end' && !$isSpinning) {
+      setTimeout(() => {
+        if ($isAutoRolling && $autoRollMode === 'on_track_end' && !$isSpinning) {
+          triggerRoll();
+        }
+      }, 2500);
+    }
+  }
+
+  let pendingArenaSeekRatio = null;
+
+  function seekArenaAudio(ratio, isExact = false) {
     const activeEl = getActiveArenaEl();
     if (!activeEl) return;
     const dur = activeEl.duration || 30;
-    const target = ratio * dur;
+    const target = Math.max(0, Math.min(dur, ratio * dur));
     arenaAudioTime.set({ current: target, duration: dur });
-    if (!isNaN(dur)) {
-      activeEl.currentTime = target;
+    if (isNaN(dur) || !isFinite(target)) return;
+
+    if (isExact) {
+      pendingArenaSeekRatio = null;
+      declickAudioSeek(activeEl, target, true);
+      return;
+    }
+
+    // If browser is actively decoding a prior seek, queue latest ratio to avoid audio stalls
+    if (activeEl.seeking) {
+      pendingArenaSeekRatio = ratio;
+      return;
+    }
+
+    declickAudioSeek(activeEl, target, false);
+  }
+
+  function handleArenaSeeked(playerId) {
+    if (activeArenaPlayerId !== playerId) return;
+    if (pendingArenaSeekRatio !== null) {
+      const nextRatio = pendingArenaSeekRatio;
+      pendingArenaSeekRatio = null;
+      seekArenaAudio(nextRatio, false);
     }
   }
 
@@ -371,7 +432,12 @@
 
   function handleRollComplete(winner, isNew) {
     activeArenaTrack.set(winner);
-    if (winner.preview_url) {
+    activeWinnerCard.set(winner);
+
+    const isKnownUnplayable = $unplayableTrackIds.has(winner.id);
+    const hasPreview = Boolean(winner.preview_url && !isKnownUnplayable);
+
+    if (hasPreview) {
       const activeEl = getActiveArenaEl();
       if (activeEl && !activeEl.paused && activeEl.src && activeEl.src.includes(winner.preview_url)) {
         // Same track is already playing; restore full volume and normal EQ smoothly
@@ -395,14 +461,22 @@
         playArenaAudio(winner.preview_url, 0, false);
       }
     } else {
-      fetchTrackPreview(winner).then((pUrl) => {
-        if (pUrl && ($activeWinnerCard?.id === winner.id || $activeArenaTrack?.id === winner.id)) {
-          winner.preview_url = pUrl;
-          activeArenaTrack.set(winner);
-          activeWinnerCard.set(winner);
-          playArenaAudio(pUrl, 0, false);
-        }
-      });
+      stopArenaAudio();
+
+      if (!isKnownUnplayable && winner.source !== 'soundcloud') {
+        fetchTrackPreview(winner).then((pUrl) => {
+          if (pUrl && ($activeWinnerCard?.id === winner.id || $activeArenaTrack?.id === winner.id)) {
+            winner.preview_url = pUrl;
+            activeArenaTrack.set(winner);
+            activeWinnerCard.set(winner);
+            playArenaAudio(pUrl, 0, false);
+          } else if (!pUrl) {
+            markTrackUnplayable(winner.id);
+          }
+        }).catch(() => {
+          markTrackUnplayable(winner.id);
+        });
+      }
     }
   }
 
@@ -574,12 +648,12 @@
     window.addEventListener('keydown', unlockAudio, { once: true });
 
     const handleKeydown = (e) => {
-      if (e.key === 'Enter' && $isCrateReady && !hasAgreedToDesktopNotice) {
-        handleAgreeNotice();
+      if (e.key === 'Enter' && showScreenWarning) {
+        handleDismissScreenWarning();
         return;
       }
       if (e.key === 'r' || e.key === 'R') {
-        if ($isCrateReady && hasAgreedToDesktopNotice && !$isSpinning && document.activeElement?.tagName !== 'INPUT') {
+        if ($isCrateReady && !showScreenWarning && !$isSpinning && document.activeElement?.tagName !== 'INPUT') {
           triggerRoll();
         }
       }
@@ -597,6 +671,8 @@
     };
   });
 </script>
+
+<svelte:window bind:innerWidth={windowWidth} bind:innerHeight={windowHeight} />
 
 <div class="app-root">
   <!-- SVG Filter for hand-drawn turbulence/boiling effect -->
@@ -639,31 +715,56 @@
     aria-hidden="true"
   ></div>
 
-  <!-- 2. Fullscreen Desktop Notice Screen -->
-  {#if $isCrateReady && !hasAgreedToDesktopNotice}
-    <div class="desktop-reminder-screen" id="desktopReminderScreen">
-      <div class="reminder-modal-card">
-        <h2 class="reminder-title">Desktop Recommended</h2>
+  <!-- 2. Small Screen Warning Overlay -->
+  {#if showScreenWarning}
+    <div
+      class="screen-warning-overlay"
+      id="screenWarningOverlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="screenWarningTitle"
+      aria-describedby="screenWarningDesc"
+    >
+      <div class="screen-warning-card">
+        <svg
+          class="screen-warning-icon"
+          width="28"
+          height="28"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="2" y="3" width="20" height="14" rx="1" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
 
-        <p class="reminder-desc">
-          Track RNG is built for wide screens, keyboard shortcuts, and full audio controls.
+        <h2 class="screen-warning-title" id="screenWarningTitle">
+          Desktop Screen Recommended
+        </h2>
+
+        <p class="screen-warning-desc" id="screenWarningDesc">
+          Optimized for wider displays (768px+). Mobile and small windows are not recommended.
         </p>
 
         <button
           type="button"
-          class="btn-agree-notice"
-          id="btnAgreeNotice"
-          on:click={handleAgreeNotice}
+          class="btn-screen-dismiss"
+          id="btnDismissScreenWarning"
+          on:click={handleDismissScreenWarning}
         >
-          <span>Continue</span>
-          <span class="reminder-btn-kbd">↵</span>
+          Continue Anyway
         </button>
       </div>
     </div>
   {/if}
 
   <!-- 3. Crate RNG Game Arena View -->
-  <div class="game-viewport {$isCrateReady && hasAgreedToDesktopNotice ? '' : 'hidden'}" id="gameArenaScreen">
+  <div class="game-viewport {$isCrateReady ? '' : 'hidden'}" id="gameArenaScreen">
     <!-- Ambient Reactive Aura Layer -->
     <div
       class="ambient-aura-layer {$isSpinning ? 'is-spinning' : ''}"
@@ -720,23 +821,19 @@
     on:timeupdate={() => {
       if (activeArenaPlayerId === 'A' && arenaAudioEl) {
         const cur = arenaAudioEl.currentTime || 0;
-        const dur = arenaAudioEl.duration || 30;
+        const realDur = arenaAudioEl.duration;
+        const dur = isFinite(realDur) && realDur > 0 ? realDur : 30;
         arenaAudioTime.set({ current: cur, duration: dur });
 
-        // Continue playing past 30s with lowpass filter engaged if track is longer than 30s
-        if (cur >= 30 && dur > 32 && !isArenaBgLooping && !isTransitioningToLoop) {
-          isArenaBgLooping = true;
-          setArenaLowpassFilter(true, 500, 100, 0.25);
-          rampAudioVolume(arenaAudioEl, 0.25, 600);
-        }
-
         // If Auto-Roll is enabled in "on_track_end" mode, roll next track right as song ends!
-        const timeLeft = dur - cur;
-        if (timeLeft <= 0.65 && timeLeft > 0.05 && !arenaAudioEl.paused) {
-          if ($isAutoRolling && $autoRollMode === 'on_track_end' && !$isSpinning) {
-            triggerRoll();
-          } else if (!isTransitioningToLoop) {
-            triggerPingPongLoopTransition();
+        if (isFinite(realDur) && realDur > 0) {
+          const timeLeft = realDur - cur;
+          if (timeLeft <= 0.65 && timeLeft > 0.05 && !arenaAudioEl.paused) {
+            if ($isAutoRolling && $autoRollMode === 'on_track_end' && !$isSpinning) {
+              triggerRoll();
+            } else if (!isTransitioningToLoop) {
+              triggerPingPongLoopTransition();
+            }
           }
         }
       }
@@ -748,6 +845,11 @@
           duration: arenaAudioEl.duration || 30,
         });
       }
+    }}
+    on:error={() => handleArenaAudioError('A')}
+    on:seeked={() => handleArenaSeeked('A')}
+    on:ended={() => {
+      if (!isTransitioningToLoop) triggerPingPongLoopTransition();
     }}
   ></audio>
 
@@ -767,23 +869,19 @@
     on:timeupdate={() => {
       if (activeArenaPlayerId === 'B' && arenaAudioElB) {
         const cur = arenaAudioElB.currentTime || 0;
-        const dur = arenaAudioElB.duration || 30;
+        const realDur = arenaAudioElB.duration;
+        const dur = isFinite(realDur) && realDur > 0 ? realDur : 30;
         arenaAudioTime.set({ current: cur, duration: dur });
 
-        // Continue playing past 30s with lowpass filter engaged if track is longer than 30s
-        if (cur >= 30 && dur > 32 && !isArenaBgLooping && !isTransitioningToLoop) {
-          isArenaBgLooping = true;
-          setArenaLowpassFilter(true, 500, 100, 0.25);
-          rampAudioVolume(arenaAudioElB, 0.25, 600);
-        }
-
         // If Auto-Roll is enabled in "on_track_end" mode, roll next track right as song ends!
-        const timeLeft = dur - cur;
-        if (timeLeft <= 0.65 && timeLeft > 0.05 && !arenaAudioElB.paused) {
-          if ($isAutoRolling && $autoRollMode === 'on_track_end' && !$isSpinning) {
-            triggerRoll();
-          } else if (!isTransitioningToLoop) {
-            triggerPingPongLoopTransition();
+        if (isFinite(realDur) && realDur > 0) {
+          const timeLeft = realDur - cur;
+          if (timeLeft <= 0.65 && timeLeft > 0.05 && !arenaAudioElB.paused) {
+            if ($isAutoRolling && $autoRollMode === 'on_track_end' && !$isSpinning) {
+              triggerRoll();
+            } else if (!isTransitioningToLoop) {
+              triggerPingPongLoopTransition();
+            }
           }
         }
       }
@@ -795,6 +893,11 @@
           duration: arenaAudioElB.duration || 30,
         });
       }
+    }}
+    on:error={() => handleArenaAudioError('B')}
+    on:seeked={() => handleArenaSeeked('B')}
+    on:ended={() => {
+      if (!isTransitioningToLoop) triggerPingPongLoopTransition();
     }}
   ></audio>
 

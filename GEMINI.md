@@ -1,6 +1,6 @@
-﻿# Spotify Crate RNG — Project GEMINI.md
+# Spotify Crate RNG — Project GEMINI.md
 
-Roblox-style track crate RNG spinner and card collector. Loads a user's listening history from **Last.fm** (primary) or a Spotify profile (secondary, currently broken), assigns dynamic rarity tiers, and lets the user roll for tracks with weighted odds.
+Roblox-style track crate RNG spinner and card collector. Loads a user's listening history from **Last.fm** (primary), **SoundCloud** liked songs (secondary), or a Spotify profile (tertiary, broken), assigns dynamic rarity tiers, and lets the user roll for tracks with weighted odds.
 
 ---
 
@@ -72,6 +72,14 @@ Server is Python 3.13 stdlib only. No pip installs needed.
 5. Sequential paging with 260ms gaps. Retry on error code 29 (rate limit) with 1.4s backoff, 2 retries.
 6. Deduplication by `title+artist` key. Rarity assigned by play count percentile.
 7. Audio previews fetched from **iTunes Search API** via `artCache.js` — not from Spotify.
+
+### SoundCloud mode (working)
+
+1. User enters a SoundCloud username or profile URL on the Onboarding screen.
+2. `server.py` fetches the profile page and extracts user metadata and dynamic `client_id` from `window.__sc_hydration`.
+3. Paginates through `api-v2.soundcloud.com/users/{id}/likes` up to 3 pages (300 tracks).
+4. Assigns rarity via **Like Age Ranking**: tracks sorted ascending by like timestamp (`created_at`). Oldest likes become Mythic; newest become Common.
+5. Progressive MP3 transcodings stream through `/api/soundcloud/stream` with CORS support and full audio playback.
 
 ### Spotify mode (broken)
 

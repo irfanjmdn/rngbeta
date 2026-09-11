@@ -9,9 +9,10 @@
     arenaAudioTime,
     rngTracks,
     isSpinning,
+    unplayableTrackIds,
   } from '../lib/store.js';
   import { isPlaceholderCover, fetchTrackDetails } from '../lib/artCache.js';
-  import { getSubBassEnergy, getTargetBassPeakMetrics } from '../lib/audio.js';
+  import { getSubBassEnergy, getTargetBassPeakMetrics, playJogDialSound } from '../lib/audio.js';
 
   export let onToggleAudio = () => {};
   export let onSeekAudio = (ratio) => {};
@@ -183,6 +184,95 @@
     } catch (_) {}
   }
 
+  let isJogActive = false;
+  let jogTargetTime = 0;
+  let jogSeekTime = 0;
+  let jogDeltaAccum = 0;
+  let jogTargetDeltaAccum = 0;
+  let jogDirection = 'forward'; // 'forward' | 'backward'
+  let jogIdleTimer = null;
+  let jogLerpRafId = null;
+
+  function startJogLerpLoop() {
+    if (jogLerpRafId) return;
+
+    let lastTime = performance.now();
+    function step(now) {
+      const dt = Math.min(0.064, (now - lastTime) / 1000);
+      lastTime = now;
+
+      if (!isJogActive && Math.abs(jogTargetTime - jogSeekTime) < 0.005) {
+        jogSeekTime = jogTargetTime;
+        jogDeltaAccum = jogTargetDeltaAccum;
+        jogLerpRafId = null;
+        return;
+      }
+
+      // Frame-rate independent exponential interpolation
+      const decay = 1 - Math.exp(-22 * dt);
+      jogSeekTime += (jogTargetTime - jogSeekTime) * decay;
+      jogDeltaAccum += (jogTargetDeltaAccum - jogDeltaAccum) * decay;
+
+      const dur = $arenaAudioTime?.duration || 30;
+      arenaAudioTime.set({ current: jogSeekTime, duration: dur });
+
+      jogLerpRafId = requestAnimationFrame(step);
+    }
+
+    jogLerpRafId = requestAnimationFrame(step);
+  }
+
+  function handleWheelSeek(e) {
+    if (!$activeWinnerCard || !$activeWinnerCard.preview_url || $unplayableTrackIds.has($activeWinnerCard.id)) return;
+    const dur = $arenaAudioTime?.duration || 0;
+    if (dur <= 0) return;
+
+    // Prevent default viewport scrolling while wheeling on winner card
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Standardize delta across mice and trackpads (invert deltaY: wheel up / right = forward)
+    const rawDelta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : -e.deltaY;
+    if (Math.abs(rawDelta) < 0.05) return;
+
+    // Initialize jog state on start of burst
+    if (!isJogActive) {
+      isJogActive = true;
+      jogSeekTime = $arenaAudioTime.current || 0;
+      jogTargetTime = jogSeekTime;
+      jogDeltaAccum = 0;
+      jogTargetDeltaAccum = 0;
+      startJogLerpLoop();
+    }
+
+    const isForward = rawDelta > 0;
+    jogDirection = isForward ? 'forward' : 'backward';
+
+    // Tactile scaling: ~1.4s per standard 100-delta notch
+    const stepSeconds = (rawDelta / 100) * Math.max(0.6, Math.min(2.5, dur * 0.015));
+    jogTargetTime = Math.max(0, Math.min(dur, jogTargetTime + stepSeconds));
+    jogTargetDeltaAccum += stepSeconds;
+
+    // Silky haptic sound micro-click
+    playJogDialSound(isForward);
+
+    // Auto-dismiss HUD and commit exact target position on settle
+    if (jogIdleTimer) clearTimeout(jogIdleTimer);
+    jogIdleTimer = setTimeout(() => {
+      onJogSettle();
+    }, 200);
+  }
+
+  function onJogSettle() {
+    const dur = $arenaAudioTime?.duration || 30;
+    // Final commit: exact seek to final target
+    onSeekAudio(jogTargetTime / dur, true);
+    isJogActive = false;
+    jogDeltaAccum = 0;
+    jogTargetDeltaAccum = 0;
+    jogIdleTimer = null;
+  }
+
   function handleKeydown(e) {
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
@@ -325,6 +415,9 @@
   });
 
   onDestroy(() => {
+    if (jogIdleTimer) clearTimeout(jogIdleTimer);
+    if (jogAudioSeekThrottleTimer) clearTimeout(jogAudioSeekThrottleTimer);
+    if (jogLerpRafId) cancelAnimationFrame(jogLerpRafId);
     if (typeof window !== 'undefined') {
       window.removeEventListener('pointermove', handleGlobalPointerMove);
     }
@@ -341,11 +434,14 @@
 
 <div class="winner-spotlight-wrapper">
   <section
-    class="winner-spotlight-box tier-{$activeWinnerCard?.rarityTier || 'common'} {$activeWinnerCard ? 'pop' : ''} {$activeWinnerCard && isNewUnlock ? 'is-holographic-new' : ''} {$isSpinning ? 'is-rolling' : ''}"
+    class="winner-spotlight-box tier-{$activeWinnerCard?.rarityTier || 'common'} {$activeWinnerCard ? 'pop' : ''} {$activeWinnerCard && isNewUnlock ? 'is-holographic-new' : ''} {$isSpinning ? 'is-rolling' : ''} {isJogActive ? 'is-jog-scrubbing' : ''} {isHoveringCard ? 'is-card-hovered' : ''}"
     id="winnerSpotlight"
     aria-label="Winner track spotlight"
     style="--tier-color: {$activeWinnerCard?.rarityColor || '#10B981'};"
     bind:this={spotlightEl}
+    on:wheel={handleWheelSeek}
+    on:mouseenter={() => { isHoveringCard = true; }}
+    on:mouseleave={() => { isHoveringCard = false; }}
   >
   {#if shimmerActive}
     <div class="winner-shimmer-sweep" aria-hidden="true"></div>
@@ -361,10 +457,12 @@
       class="winner-art-wrap"
       id="winnerArtWrap"
       role="button"
-      tabindex="0"
-      aria-label="Play or pause audio preview"
-      on:click={onToggleAudio}
-      on:keydown={handleKeydown}
+      tabindex={$activeWinnerCard && $activeWinnerCard.preview_url && !$unplayableTrackIds.has($activeWinnerCard.id) ? 0 : -1}
+      aria-disabled={!$activeWinnerCard || !$activeWinnerCard.preview_url || $unplayableTrackIds.has($activeWinnerCard.id)}
+      aria-label={$activeWinnerCard && $activeWinnerCard.preview_url && !$unplayableTrackIds.has($activeWinnerCard.id) ? "Play or pause audio preview" : "Album cover"}
+      style={$activeWinnerCard && (!$activeWinnerCard.preview_url || $unplayableTrackIds.has($activeWinnerCard.id)) ? "cursor: default;" : ""}
+      on:click={$activeWinnerCard && $activeWinnerCard.preview_url && !$unplayableTrackIds.has($activeWinnerCard.id) ? onToggleAudio : null}
+      on:keydown={$activeWinnerCard && $activeWinnerCard.preview_url && !$unplayableTrackIds.has($activeWinnerCard.id) ? handleKeydown : null}
     >
       <img
         class="winner-art-img {$activeWinnerCard && isPlaceholderCover($activeWinnerCard) ? 'is-placeholder-art' : ''}"
@@ -372,30 +470,73 @@
         src={$activeWinnerCard ? albumCoverLoaded : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%231e293b'/%3E%3C/svg%3E"}
         alt="Album Cover"
       />
-      <div class="winner-art-hover-overlay" id="winnerArtHoverOverlay" aria-hidden="true">
-        <svg
-          class="winner-art-hover-icon {$isArenaPlaying ? 'hidden' : ''}"
-          id="winnerArtHoverPlay"
-          width="34"
-          height="34"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          style={$isArenaPlaying ? 'display:none;' : 'display:block;'}
+      {#if $activeWinnerCard && $activeWinnerCard.preview_url && !$unplayableTrackIds.has($activeWinnerCard.id)}
+        <div class="winner-art-hover-overlay" id="winnerArtHoverOverlay" aria-hidden="true">
+          <svg
+            class="winner-art-hover-icon {$isArenaPlaying ? 'hidden' : ''}"
+            id="winnerArtHoverPlay"
+            width="34"
+            height="34"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            style={$isArenaPlaying ? 'display:none;' : 'display:block;'}
+          >
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <svg
+            class="winner-art-hover-icon {!$isArenaPlaying ? 'hidden' : ''}"
+            id="winnerArtHoverPause"
+            width="34"
+            height="34"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            style={!$isArenaPlaying ? 'display:none;' : 'display:block;'}
+          >
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+          </svg>
+        </div>
+      {/if}
+
+
+      <!-- Distilled Hardware Jog Scrub HUD Overlay -->
+      {#if isJogActive}
+        <div
+          class="winner-jog-hud-overlay"
+          id="winnerJogHud"
+          aria-live="polite"
+          aria-label="Audio jog position: {formatTime(jogSeekTime)}"
         >
-          <path d="M8 5v14l11-7z" />
-        </svg>
-        <svg
-          class="winner-art-hover-icon {!$isArenaPlaying ? 'hidden' : ''}"
-          id="winnerArtHoverPause"
-          width="34"
-          height="34"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          style={!$isArenaPlaying ? 'display:none;' : 'display:block;'}
-        >
-          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-        </svg>
-      </div>
+          <!-- Top Row: Minimal Telemetry Delta Chip -->
+          <div class="jog-hud-top-bar">
+            <div class="jog-hud-delta-pill {jogDirection}" id="jogHudDeltaPill">
+              <span class="jog-hud-delta-dir">{jogDirection === 'forward' ? 'FWD' : 'REV'}</span>
+              <span class="jog-hud-delta-val">
+                {jogDeltaAccum >= 0 ? '+' : ''}{jogDeltaAccum.toFixed(1)}s
+              </span>
+            </div>
+          </div>
+
+          <!-- Hero Timestamp Display -->
+          <div class="jog-hud-time-hero">
+            <span class="jog-hud-time-current">{formatTime(jogSeekTime)}</span>
+            <span class="jog-hud-time-total">/ {formatTime($arenaAudioTime.duration || 30)}</span>
+          </div>
+
+          <!-- Precision Hairline Progress Gauge -->
+          <div class="jog-hud-gauge-wrap" aria-hidden="true">
+            <div class="jog-hud-gauge-track">
+              <div
+                class="jog-hud-gauge-fill"
+                style="width: {scrubPercent}; background: {$activeWinnerCard?.rarityColor || 'var(--brand-green)'};"
+              ></div>
+              <div
+                class="jog-hud-gauge-bead"
+                style="left: {scrubPercent};"
+              ></div>
+            </div>
+          </div>
+        </div>
+      {/if}
     </div>
     <div
       class="winner-rarity-banner"
@@ -483,7 +624,7 @@
       {/if}
     </div>
 
-    {#if $activeWinnerCard && $activeWinnerCard.preview_url}
+    {#if $activeWinnerCard && $activeWinnerCard.preview_url && !$unplayableTrackIds.has($activeWinnerCard.id)}
       <div class="winner-audio-seeker" id="winnerAudioSeeker" style="display:flex;">
         <button
           class="btn-mini-play"
@@ -516,7 +657,7 @@
           </svg>
         </button>
         <div
-          class="audio-scrub-track {isDragging ? 'is-dragging' : ''}"
+          class="audio-scrub-track {isDragging ? 'is-dragging' : ''} {isJogActive ? 'is-jogging' : ''}"
           id="winnerScrubTrack"
           role="slider"
           aria-label="Track audio progress scrubber"
@@ -555,10 +696,10 @@
         <a
           class="btn-winner-spotify"
           id="winnerSpotifyBtn"
-          href={$activeWinnerCard.spotify_url || $activeWinnerCard.playlist_url || $activeWinnerCard.uri}
+          href={$activeWinnerCard.source_url || $activeWinnerCard.spotify_url || $activeWinnerCard.playlist_url || $activeWinnerCard.uri}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={$activeWinnerCard.source === 'spotify' ? 'Open track on Spotify' : 'Open track on Last.fm'}
+          aria-label={$activeWinnerCard.source === 'spotify' ? 'Open track on Spotify' : ($activeWinnerCard.source === 'soundcloud' ? 'Open track on SoundCloud' : 'Open track on Last.fm')}
           on:click={handleSpotifyClick}
         >
           {#if $activeWinnerCard.source === 'spotify'}
@@ -568,6 +709,13 @@
               />
             </svg>
             <span>Listen on Spotify</span>
+          {:else if $activeWinnerCard.source === 'soundcloud'}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M1.17 12.23c-.05 0-.1.04-.1.1v4.83c0 .06.05.1.1.1h.47c.06 0 .1-.04.1-.1v-4.83c0-.06-.04-.1-.1-.1h-.47zm1.18-.55c-.06 0-.1.05-.1.1v5.93c0 .06.04.1.1.1h.47c.05 0 .1-.04.1-.1v-5.93c0-.05-.05-.1-.1-.1h-.47zm1.17-.67c-.06 0-.1.05-.1.1v7.28c0 .05.04.1.1.1h.48c.05 0 .1-.05.1-.1v-7.28c0-.05-.05-.1-.1-.1h-.48zm1.18-.32c-.05 0-.1.04-.1.1v7.92c0 .05.05.1.1.1h.47c.06 0 .1-.05.1-.1v-7.92c0-.06-.04-.1-.1-.1h-.47zm1.18-.08c-.06 0-.1.05-.1.1v8.08c0 .06.04.1.1.1h.47c.06 0 .1-.04.1-.1v-8.08c0-.05-.04-.1-.1-.1h-.47zm1.17-.23c-.05 0-.1.05-.1.1v8.39c0 .05.05.1.1.1h.48c.05 0 .1-.05.1-.1v-8.39c0-.05-.05-.1-.1-.1h-.48zm1.18-.46c-.05 0-.1.05-.1.1v8.93c0 .05.05.1.1.1h.47c.06 0 .1-.05.1-.1V9.92c0-.05-.04-.1-.1-.1h-.47zm1.18-.54c-.05 0-.1.04-.1.1v9.55c0 .05.05.1.1.1h.47c.06 0 .1-.05.1-.1V9.38c0-.06-.04-.1-.1-.1h-.47zm1.17-.24c-.05 0-.1.05-.1.1v9.87c0 .06.05.1.1.1h.48c.05 0 .1-.04.1-.1V9.14c0-.05-.05-.1-.1-.1h-.48zm1.53-.45c.16-.62.47-1.18.91-1.63.76-.78 1.8-1.24 2.92-1.24.45 0 .88.08 1.28.23.47.18.89.46 1.23.82.26.27.47.58.62.92.51-.31 1.1-.48 1.73-.48 1.78 0 3.23 1.45 3.23 3.23 0 .12-.01.24-.03.35.98.53 1.64 1.56 1.64 2.75 0 1.74-1.41 3.15-3.15 3.15H11.8c-.06 0-.1-.04-.1-.1V8.79c0-.05-.04-.1-.1-.1h-.63z"
+              />
+            </svg>
+            <span>Listen on SoundCloud</span>
           {:else}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
               <path
