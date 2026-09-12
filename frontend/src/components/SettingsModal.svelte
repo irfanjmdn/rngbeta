@@ -3,8 +3,6 @@
     activeModal,
     isCrateReady,
     rngTracks,
-    activeUserId,
-    activeMode,
     isAutoRolling,
     activeWinnerCard,
     activeArenaTrack,
@@ -187,26 +185,16 @@
       </div>
 
 
-      <!-- Crate & Profile Section -->
-      <div class="settings-section settings-profile-section">
-        <div class="settings-row">
-          <div class="settings-info">
-            <div class="settings-label">Active Crate</div>
-            <div class="settings-sublabel">
-              {$activeUserId ? `@${$activeUserId}` : 'Active user'} &bull; {$rngTracks.length} tracks &bull; {($activeMode || 'lastfm').toUpperCase()}
-            </div>
-          </div>
-        </div>
-        <div class="settings-actions-row">
-          <button
-            type="button"
-            class="btn-settings-switch-crate"
-            id="btnSettingsSwitchCrate"
-            on:click={handleSwitchCrate}
-          >
-            Switch Crate / Profile
-          </button>
-        </div>
+      <!-- Mobile Logout Section (Hidden on Desktop) -->
+      <div class="settings-mobile-logout-wrap">
+        <button
+          type="button"
+          class="btn-mobile-settings-logout"
+          id="btnMobileSettingsLogout"
+          on:click={handleSwitchCrate}
+        >
+          Log Out
+        </button>
       </div>
     </div>
   </div>

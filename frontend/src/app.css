@@ -1969,6 +1969,7 @@ body {
   }
 
   .hud-mobile-top-bar .hud-brand-sub {
+    margin-top: 0 !important;
     font-family: var(--font-mono);
     font-size: 8.5px;
     font-weight: 700;
@@ -2602,8 +2603,10 @@ body {
      Tactile modern collectible music card layout
      -------------------------------------------------------------------------- */
   .winner-spotlight-wrapper {
-    width: 100%;
-    max-width: 100%;
+    width: calc(100% + 12px) !important;
+    max-width: calc(100% + 12px) !important;
+    margin-left: -6px !important;
+    margin-right: -6px !important;
     margin-top: 0 !important;
     margin-bottom: 0 !important;
     flex-shrink: 0;
@@ -2616,7 +2619,7 @@ body {
       "art header"
       "art footer"
       "seeker seeker" !important;
-    gap: 6px 10px !important;
+    gap: 6px 8px !important;
     width: 100% !important;
     height: auto !important;
     min-height: 0 !important;
@@ -2625,7 +2628,7 @@ body {
     border: 1px solid var(--tier-color, rgba(255, 255, 255, 0.12)) !important;
     border-radius: 0 !important;
     box-shadow: none !important;
-    padding: 10px !important;
+    padding: 8px 10px !important;
     margin: 0 !important;
     box-sizing: border-box !important;
     transform: none !important;
@@ -2859,7 +2862,11 @@ body {
     width: 100% !important;
     margin: 6px 0 0 0 !important;
     padding: 6px 0 0 0 !important;
+    background: transparent !important;
+    border: none !important;
     border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
     box-sizing: border-box !important;
   }
 
@@ -2955,10 +2962,10 @@ body {
     grid-area: footer !important;
     display: flex !important;
     align-items: center !important;
-    justify-content: flex-start !important;
-    gap: 6px !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
     width: 100% !important;
-    margin: 4px 0 0 0 !important;
+    margin: 3px 0 0 0 !important;
     min-width: 0 !important;
     align-self: start !important;
   }
@@ -2966,26 +2973,39 @@ body {
   .winner-meta-tags {
     min-width: 0 !important;
     flex: 1 1 auto !important;
-    max-width: calc(100% - 110px) !important;
+    max-width: none !important;
+    display: flex !important;
+    align-items: center !important;
+    overflow: hidden !important;
   }
 
   .meta-tag.source-tag {
     display: inline-flex !important;
     align-items: center !important;
-    height: 24px !important;
+    height: auto !important;
     max-width: 100% !important;
     box-sizing: border-box !important;
-    font-size: 9.5px !important;
-    font-weight: 700 !important;
+    font-size: 10px !important;
+    font-weight: 600 !important;
     color: #94A3B8 !important;
-    background: rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    padding: 0 7px !important;
-    border-radius: 4px !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     text-decoration: none !important;
+  }
+
+  .meta-tag.source-tag .winner-source {
+    color: #94A3B8 !important;
+    font-weight: 600 !important;
+    font-size: 10px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
   }
 
   .btn-winner-spotify {
@@ -3787,8 +3807,35 @@ body {
     border-radius: 10px !important;
   }
 
-  .settings-profile-section {
+  .settings-mobile-logout-wrap {
+    display: block !important;
+    width: 100% !important;
+    margin-top: 4px !important;
+  }
+
+  .btn-mobile-settings-logout {
+    width: 100% !important;
+    height: 38px !important;
+    background: rgba(244, 63, 94, 0.08) !important;
+    border: 1px solid rgba(244, 63, 94, 0.28) !important;
+    border-radius: 8px !important;
+    color: #F43F5E !important;
+    font-family: var(--font-display) !important;
+    font-size: 11.5px !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+    cursor: pointer !important;
     display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: background-color 0.12s, border-color 0.12s !important;
+    touch-action: manipulation !important;
+  }
+
+  .btn-mobile-settings-logout:active {
+    background: rgba(244, 63, 94, 0.2) !important;
+    border-color: #F43F5E !important;
   }
 
   .settings-row {
@@ -7691,6 +7738,12 @@ a.meta-tag.source-tag:hover strong {
 
 .settings-profile-section {
   display: none !important;
+}
+
+@media (min-width: 769px) {
+  .settings-mobile-logout-wrap {
+    display: none !important;
+  }
 }
 
 .settings-row {
