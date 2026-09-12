@@ -3958,6 +3958,55 @@ body {
     border-radius: 0 !important;
   }
 
+  .onboarding-mobile-install-wrap {
+    display: block !important;
+    width: 100% !important;
+    margin-top: 10px !important;
+  }
+
+  .btn-onboarding-install {
+    width: 100% !important;
+    height: 40px !important;
+    background: rgba(16, 185, 129, 0.08) !important;
+    border: 1px solid rgba(16, 185, 129, 0.3) !important;
+    border-radius: 0 !important;
+    color: var(--brand-green) !important;
+    font-family: var(--font-display) !important;
+    font-size: 11.5px !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    transition: background-color 0.12s, border-color 0.12s !important;
+    touch-action: manipulation !important;
+  }
+
+  .btn-onboarding-install:active {
+    background: rgba(16, 185, 129, 0.2) !important;
+    border-color: #10B981 !important;
+  }
+
+  .onboarding-install-hint {
+    margin-top: 6px !important;
+    padding: 8px 10px !important;
+    background: #0B0E17 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 0 !important;
+    font-family: var(--font-body) !important;
+    font-size: 11px !important;
+    color: #94A3B8 !important;
+    line-height: 1.4 !important;
+    text-align: center !important;
+  }
+
+  .onboarding-install-hint strong {
+    color: #F8FAFC !important;
+  }
+
   .debug-terminal {
     max-height: 180px !important;
     -webkit-overflow-scrolling: touch !important;
@@ -7741,7 +7790,8 @@ a.meta-tag.source-tag:hover strong {
 }
 
 @media (min-width: 769px) {
-  .settings-mobile-logout-wrap {
+  .settings-mobile-logout-wrap,
+  .onboarding-mobile-install-wrap {
     display: none !important;
   }
 }

@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   import {
     debugLogs,
     debugStatus,
@@ -14,6 +15,53 @@
   // Screen state: 'select' (First thing: 2 big buttons) | 'entry' (Input card)
   let currentStep = 'select';
   let selectedMode = 'lastfm'; // 'lastfm' | 'soundcloud' | 'spotify'
+
+  let isAppInstalled = false;
+  let deferredInstallPrompt = null;
+  let showInstallHint = false;
+
+  onMount(() => {
+    if (typeof window !== 'undefined') {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches 
+        || window.matchMedia('(display-mode: fullscreen)').matches 
+        || window.navigator.standalone === true;
+      if (isStandalone) {
+        isAppInstalled = true;
+      }
+
+      function handleBeforeInstallPrompt(e) {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+      }
+
+      function handleAppInstalled() {
+        isAppInstalled = true;
+        deferredInstallPrompt = null;
+        showInstallHint = false;
+      }
+
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.addEventListener('appinstalled', handleAppInstalled);
+
+      return () => {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        window.removeEventListener('appinstalled', handleAppInstalled);
+      };
+    }
+  });
+
+  async function handleInstallApp() {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      const choice = await deferredInstallPrompt.userChoice;
+      if (choice && choice.outcome === 'accepted') {
+        isAppInstalled = true;
+      }
+      deferredInstallPrompt = null;
+    } else {
+      showInstallHint = !showInstallHint;
+    }
+  }
 
   let wasCrateReady = false;
   $: {
@@ -206,6 +254,31 @@
           </div>
         </button>
       </div>
+
+      <!-- Mobile Web App Install Action -->
+      {#if !isAppInstalled}
+        <div class="onboarding-mobile-install-wrap">
+          <button
+            type="button"
+            class="btn-onboarding-install"
+            id="btnOnboardingInstall"
+            on:click={handleInstallApp}
+            aria-label="Install App"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span>Install App</span>
+          </button>
+          {#if showInstallHint}
+            <div class="onboarding-install-hint" id="installAppHint">
+              Tap browser menu &bull; or Share &bull; then select <strong>Add to Home Screen</strong>
+            </div>
+          {/if}
+        </div>
+      {/if}
 
       <!-- Previously Loaded Profiles (Distilled & Usable) -->
       {#if $recentProfiles && $recentProfiles.length > 0}
@@ -448,6 +521,31 @@
           </div>
         {/if}
       </form>
+
+      <!-- Mobile Web App Install Action -->
+      {#if !isAppInstalled}
+        <div class="onboarding-mobile-install-wrap">
+          <button
+            type="button"
+            class="btn-onboarding-install"
+            id="btnOnboardingInstallEntry"
+            on:click={handleInstallApp}
+            aria-label="Install App"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span>Install App</span>
+          </button>
+          {#if showInstallHint}
+            <div class="onboarding-install-hint" id="installAppHintEntry">
+              Tap browser menu &bull; or Share &bull; then select <strong>Add to Home Screen</strong>
+            </div>
+          {/if}
+        </div>
+      {/if}
 
       <!-- Collapsible Live Progress & Console Dropdown -->
       <details class="debug-dropdown" id="debugDropdown" bind:open={isConsoleOpen}>
