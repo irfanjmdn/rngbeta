@@ -17,7 +17,179 @@ export default {
     const url = new URL(request.url);
     const pathname = url.pathname;
 
-    // 1. Check for /user/:userId endpoint
+    // -------------------------------------------------------------------------
+    // SoundCloud endpoints
+    // -------------------------------------------------------------------------
+    const scUserMatch = pathname.match(/\/soundcloud\/user\/([a-zA-Z0-9_.-]+)/);
+    if (scUserMatch) {
+      const username = scUserMatch[1];
+      try {
+        const scProfileUrl = `https://soundcloud.com/${encodeURIComponent(username)}`;
+        const scRes = await fetch(scProfileUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+          },
+        });
+
+        if (!scRes.ok) {
+          return new Response(
+            JSON.stringify({ error: `SoundCloud profile returned HTTP ${scRes.status}. Profile may not exist or is private.` }),
+            { status: scRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const html = await scRes.text();
+        const hydrationMatch = html.match(/window\.__sc_hydration\s*=\s*(\[[\s\S]*?\]);<\/script>/);
+        if (!hydrationMatch) {
+          return new Response(
+            JSON.stringify({ error: `Could not locate SoundCloud profile hydration data for '${username}'.` }),
+            { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        let hydrationData = [];
+        try {
+          hydrationData = JSON.parse(hydrationMatch[1]);
+        } catch (e) {
+          return new Response(
+            JSON.stringify({ error: "Failed to parse SoundCloud hydration JSON." }),
+            { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        let clientId = "Pb72ranhoyt6gw7hM7TkzUItXlMWSNSo";
+        let userInfo = null;
+
+        for (const item of hydrationData) {
+          if (item.hydratable === "apiClient") {
+            const cid = item.data?.id;
+            if (cid) clientId = cid;
+          } else if (item.hydratable === "user") {
+            userInfo = item.data;
+          }
+        }
+
+        if (!userInfo) {
+          return new Response(
+            JSON.stringify({ error: `Could not find public profile for SoundCloud user '${username}'.` }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const userId = userInfo.id;
+        const likesCount = userInfo.likes_count || 0;
+
+        // Fetch likes collection up to 3 pages (300 tracks)
+        let allItems = [];
+        let likesUrl = `https://api-v2.soundcloud.com/users/${userId}/likes?limit=100&client_id=${clientId}`;
+        let page = 1;
+        const maxPages = 3;
+
+        while (likesUrl && page <= maxPages) {
+          try {
+            const lRes = await fetch(likesUrl, {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+              },
+            });
+            if (!lRes.ok) break;
+            const lData = await lRes.json();
+            const items = lData.collection || [];
+            allItems = allItems.concat(items);
+            let nextHref = lData.next_href;
+            if (nextHref && items.length > 0) {
+              if (!nextHref.includes("client_id=")) {
+                const sep = nextHref.includes("?") ? "&" : "?";
+                nextHref += `${sep}client_id=${clientId}`;
+              }
+              likesUrl = nextHref;
+              page++;
+            } else {
+              break;
+            }
+          } catch (e) {
+            break;
+          }
+        }
+
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            user: {
+              id: userId,
+              username: userInfo.username || username,
+              avatar_url: userInfo.avatar_url || "",
+              likes_count: likesCount,
+            },
+            client_id: clientId,
+            collection: allItems,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ error: err.message || "Failed to fetch SoundCloud user" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    if (pathname.startsWith("/soundcloud/stream")) {
+      const tcUrl = url.searchParams.get("url");
+      const cid = url.searchParams.get("client_id") || "Pb72ranhoyt6gw7hM7TkzUItXlMWSNSo";
+      if (!tcUrl) {
+        return new Response(JSON.stringify({ error: "Missing url parameter" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        const sep = tcUrl.includes("?") ? "&" : "?";
+        const target = `${tcUrl}${sep}client_id=${cid}`;
+        const sRes = await fetch(target, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          },
+        });
+
+        if (!sRes.ok) {
+          return new Response(
+            JSON.stringify({ error: `Transcoding resolution returned HTTP ${sRes.status}` }),
+            { status: sRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const sData = await sRes.json();
+        const streamUrl = sData.url;
+
+        if (!streamUrl) {
+          return new Response(
+            JSON.stringify({ error: "No stream URL found in transcoding response" }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const accept = request.headers.get("Accept") || "";
+        if (accept.includes("application/json") && !accept.includes("audio/")) {
+          return new Response(JSON.stringify({ url: streamUrl }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return Response.redirect(streamUrl, 302);
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ error: err.message || "Failed to resolve stream URL" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // 1. Check for /user/:userId endpoint (Spotify)
     const userMatch = pathname.match(/\/user\/([a-zA-Z0-9_.-]+)/);
     const queryUser = url.searchParams.get("user");
     const targetUser = userMatch ? userMatch[1] : queryUser;

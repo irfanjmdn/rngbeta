@@ -40,6 +40,7 @@
     declickAudioSeek,
   } from './lib/audio.js';
   import { fetchTrackPreview } from './lib/artCache.js';
+  import { getSoundCloudProxyUrl } from './lib/modes/soundcloudEngine.js';
 
   let windowWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
   let windowHeight = typeof window !== 'undefined' ? window.innerHeight : 768;
@@ -151,10 +152,22 @@
   let isArenaBgLooping = false;
   let isTransitioningToLoop = false;
 
+  function resolveAudioUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('/api/soundcloud/stream')) {
+      if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        const proxyBase = getSoundCloudProxyUrl();
+        return url.replace('/api/soundcloud/stream', `${proxyBase.replace(/\/+$/, '')}/soundcloud/stream`);
+      }
+    }
+    return url;
+  }
+
   function playArenaAudio(url, startTime = 0, isLoop = false) {
     stopBinderAudio();
     const activeEl = getActiveArenaEl();
     if (!activeEl || !url) return;
+    const targetUrl = resolveAudioUrl(url);
 
     try {
       isArenaBgLooping = isLoop;
@@ -177,8 +190,8 @@
       activeEl.pause();
       const targetVol = isLoop ? 0.18 : 1.0;
       activeEl.volume = targetVol;
-      if (activeEl.src !== url) {
-        activeEl.src = url;
+      if (activeEl.src !== targetUrl) {
+        activeEl.src = targetUrl;
       }
       activeEl.currentTime = startTime;
       activeEl.play().catch(() => {
@@ -352,8 +365,9 @@
       connectMediaElement(binderAudioEl);
       binderAudioEl.pause();
       binderAudioEl.volume = 1;
-      if (binderAudioEl.src !== card.preview_url) {
-        binderAudioEl.src = card.preview_url;
+      const targetUrl = resolveAudioUrl(card.preview_url);
+      if (binderAudioEl.src !== targetUrl) {
+        binderAudioEl.src = targetUrl;
       }
       binderAudioEl.currentTime = 0;
       binderAudioEl.play().catch(() => isBinderPlaying.set(false));

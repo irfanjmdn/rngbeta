@@ -84,10 +84,6 @@
 
   function handleSelectRecent(profile) {
     if (!profile || $isBuildingCrate) return;
-    if (profile.mode === 'soundcloud') {
-      appendLog('SoundCloud mode is currently work in progress.', 'warn');
-      return;
-    }
 
     selectedMode = profile.mode;
     const targetInput = (profile.fetchTarget || profile.input || profile.rawUserId || (profile.mode === 'lastfm' || profile.mode === 'soundcloud' ? profile.userId : '') || '').trim();
@@ -130,7 +126,6 @@
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (selectedMode === 'soundcloud') return;
     const currentInput = selectedMode === 'lastfm' ? lastfmUsername : (selectedMode === 'soundcloud' ? soundcloudInput : spotifyInput);
     if (!currentInput.trim()) return;
     fetchAndBuildCrate(currentInput.trim(), selectedMode, false);
@@ -189,16 +184,14 @@
           </div>
         </button>
 
-        <!-- SoundCloud Card (WIP) -->
+        <!-- SoundCloud Card -->
         <button
           type="button"
-          class="mode-big-card mode-card-soundcloud is-wip"
+          class="mode-big-card mode-card-soundcloud"
           id="btnChooseSoundCloud"
-          disabled
-          aria-label="SoundCloud crate mode (Work in progress)"
-          title="SoundCloud mode is currently work in progress"
+          on:click={() => pickMode('soundcloud')}
+          aria-label="Select SoundCloud crate mode"
         >
-          <span class="mode-card-badge-wip" aria-hidden="true">WIP</span>
           <div class="mode-icon-cradle cradle-soundcloud">
             <!-- Official SoundCloud Cloud SVG -->
             <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -233,7 +226,7 @@
               {@const profileKey = `${profile.mode}:${profile.fetchTarget || profile.userId}`}
               {@const isThisLoading = activeLoadingProfileKey === profileKey && $isBuildingCrate}
               <div
-                class="recent-profile-card {profile.mode === 'soundcloud' ? 'is-wip' : ''} {isThisLoading ? 'is-loading' : ''} {$isBuildingCrate && !isThisLoading ? 'is-disabled' : ''}"
+                class="recent-profile-card {isThisLoading ? 'is-loading' : ''} {$isBuildingCrate && !isThisLoading ? 'is-disabled' : ''}"
                 role="button"
                 tabindex="0"
                 on:click={() => handleSelectRecent(profile)}
@@ -243,7 +236,7 @@
                     handleSelectRecent(profile);
                   }
                 }}
-                aria-label="Load {profile.displayName || profile.userId} on {profile.mode === 'lastfm' ? 'Last.fm' : (profile.mode === 'soundcloud' ? 'SoundCloud (Work in progress)' : 'Spotify')}"
+                aria-label="Load {profile.displayName || profile.userId} on {profile.mode === 'lastfm' ? 'Last.fm' : (profile.mode === 'soundcloud' ? 'SoundCloud' : 'Spotify')}"
                 aria-busy={isThisLoading}
               >
                 <!-- Avatar / Spinner -->
@@ -288,10 +281,8 @@
                 <!-- Username / Display Name -->
                 <span class="recent-profile-name">{profile.displayName || profile.userId}</span>
 
-                <!-- Status / Track Count / WIP Badge -->
-                {#if profile.mode === 'soundcloud'}
-                  <span class="recent-wip-badge" title="Work in progress">WIP</span>
-                {:else if isThisLoading}
+                <!-- Status / Track Count -->
+                {#if isThisLoading}
                   <span class="recent-loading-text">LOADING...</span>
                 {:else if profile.tracksCount > 0}
                   <span class="recent-profile-count">{profile.tracksCount} tracks</span>
@@ -364,16 +355,14 @@
           <button
             type="button"
             role="tab"
-            class="source-tab-btn is-wip {selectedMode === 'soundcloud' ? 'is-active is-soundcloud' : ''}"
+            class="source-tab-btn {selectedMode === 'soundcloud' ? 'is-active is-soundcloud' : ''}"
             aria-selected={selectedMode === 'soundcloud'}
-            disabled
-            title="SoundCloud mode is currently work in progress"
+            on:click={() => switchMode('soundcloud')}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M1.17 12.23c-.05 0-.1.04-.1.1v4.83c0 .06.05.1.1.1h.47c.06 0 .1-.04.1-.1v-4.83c0-.06-.04-.1-.1-.1h-.47zm1.18-.55c-.06 0-.1.05-.1.1v5.93c0 .06.04.1.1.1h.47c.05 0 .1-.04.1-.1v-5.93c0-.05-.05-.1-.1-.1h-.47zm1.17-.67c-.06 0-.1.05-.1.1v7.28c0 .05.04.1.1.1h.48c.05 0 .1-.05.1-.1v-7.28c0-.05-.05-.1-.1-.1h-.48zm1.18-.32c-.05 0-.1.04-.1.1v7.92c0 .05.05.1.1.1h.47c.06 0 .1-.05.1-.1v-7.92c0-.06-.04-.1-.1-.1h-.47zm1.18-.08c-.06 0-.1.05-.1.1v8.08c0 .06.04.1.1.1h.47c.06 0 .1-.04.1-.1v-8.08c0-.05-.04-.1-.1-.1h-.47zm1.17-.23c-.05 0-.1.05-.1.1v8.39c0 .05.05.1.1.1h.48c.05 0 .1-.05.1-.1v-8.39c0-.05-.05-.1-.1-.1h-.48zm1.18-.46c-.05 0-.1.05-.1.1v8.93c0 .05.05.1.1.1h.47c.06 0 .1-.05.1-.1V9.92c0-.05-.04-.1-.1-.1h-.47zm1.18-.54c-.05 0-.1.04-.1.1v9.55c0 .05.05.1.1.1h.47c.06 0 .1-.05.1-.1V9.38c0-.06-.04-.1-.1-.1h-.47zm1.17-.24c-.05 0-.1.05-.1.1v9.87c0 .06.05.1.1.1h.48c.05 0 .1-.04.1-.1V9.14c0-.05-.05-.1-.1-.1h-.48zm1.53-.45c.16-.62.47-1.18.91-1.63.76-.78 1.8-1.24 2.92-1.24.45 0 .88.08 1.28.23.47.18.89.46 1.23.82.26.27.47.58.62.92.51-.31 1.1-.48 1.73-.48 1.78 0 3.23 1.45 3.23 3.23 0 .12-.01.24-.03.35.98.53 1.64 1.56 1.64 2.75 0 1.74-1.41 3.15-3.15 3.15H11.8c-.06 0-.1-.04-.1-.1V8.79c0-.05-.04-.1-.1-.1h-.63z"/>
             </svg>
             <span>SOUNDCLOUD</span>
-            <span class="source-tab-wip-tag" aria-hidden="true">WIP</span>
           </button>
         </div>
       </div>
