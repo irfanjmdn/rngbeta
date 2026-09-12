@@ -14,6 +14,7 @@
   } from '../lib/store.js';
   import { isPlaceholderCover, fetchTrackDetails } from '../lib/artCache.js';
   import { getSubBassEnergy, getTargetBassPeakMetrics, playJogDialSound } from '../lib/audio.js';
+  import { triggerHaptic, triggerThrottledHaptic } from '../lib/haptics.js';
 
   export let onToggleAudio = () => {};
   export let onSeekAudio = (ratio) => {};
@@ -149,8 +150,11 @@
 
   $: timeLabelText = `${formatTime($arenaAudioTime.current)} / ${formatTime($arenaAudioTime.duration || 30)}`;
 
+  let lastScrubSec = -1;
+
   function handleStarClick() {
     if ($activeWinnerCard) {
+      triggerHaptic('light');
       toggleStar($activeWinnerCard.id);
     }
   }
@@ -160,6 +164,12 @@
     const rect = scrubTrackEl.getBoundingClientRect();
     if (rect.width <= 0) return;
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const dur = $arenaAudioTime?.duration || 30;
+    const curSec = Math.floor(ratio * dur);
+    if (curSec !== lastScrubSec) {
+      lastScrubSec = curSec;
+      triggerThrottledHaptic('selection', 40);
+    }
     onSeekAudio(ratio);
   }
 
@@ -183,6 +193,27 @@
     try {
       scrubTrackEl.releasePointerCapture(e.pointerId);
     } catch (_) {}
+  }
+
+  function handleTouchStart(e) {
+    if (e.touches && e.touches.length > 0) {
+      isDragging = true;
+      const touch = e.touches[0];
+      handleScrubSeek({ clientX: touch.clientX });
+    }
+  }
+
+  function handleTouchMove(e) {
+    if (!isDragging) return;
+    if (e.touches && e.touches.length > 0) {
+      if (e.cancelable) e.preventDefault();
+      const touch = e.touches[0];
+      handleScrubSeek({ clientX: touch.clientX });
+    }
+  }
+
+  function handleTouchEnd() {
+    isDragging = false;
   }
 
   let isJogActive = false;
@@ -256,6 +287,7 @@
 
     // Silky haptic sound micro-click
     playJogDialSound(isForward);
+    triggerThrottledHaptic('selection', 40);
 
     // Auto-dismiss HUD and commit exact target position on settle
     if (jogIdleTimer) clearTimeout(jogIdleTimer);
@@ -422,6 +454,11 @@
       bassRafId = null;
       return;
     }
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+    if (isMobile) {
+      bassRafId = null;
+      return;
+    }
     if ($isArenaPlaying) {
       const metrics = getTargetBassPeakMetrics(20, 150);
       const rawEnergy = metrics.energy;
@@ -495,6 +532,11 @@
       tiltRafId = null;
       return;
     }
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+    if (isMobile) {
+      tiltRafId = null;
+      return;
+    }
     // High-fidelity spring/lerp damping (alpha = 0.10)
     const factor = 0.10;
     currentTiltX += (targetTiltX - currentTiltX) * factor;
@@ -549,8 +591,11 @@
     if (typeof document !== 'undefined' && !document.hidden) {
       rumbleX = 0;
       rumbleY = 0;
-      if (!bassRafId) bassRafId = requestAnimationFrame(tickSubBass);
-      if (!tiltRafId) tiltRafId = requestAnimationFrame(tickTilt);
+      const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+      if (!isMobile) {
+        if (!bassRafId) bassRafId = requestAnimationFrame(tickSubBass);
+        if (!tiltRafId) tiltRafId = requestAnimationFrame(tickTilt);
+      }
     } else if (typeof document !== 'undefined' && document.hidden) {
       if (bassRafId) { cancelAnimationFrame(bassRafId); bassRafId = null; }
       if (tiltRafId) { cancelAnimationFrame(tiltRafId); tiltRafId = null; }
@@ -558,8 +603,11 @@
   }
 
   onMount(() => {
-    bassRafId = requestAnimationFrame(tickSubBass);
-    tiltRafId = requestAnimationFrame(tickTilt);
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+    if (!isMobile) {
+      bassRafId = requestAnimationFrame(tickSubBass);
+      tiltRafId = requestAnimationFrame(tickTilt);
+    }
     window.addEventListener('pointermove', handleGlobalPointerMove, { passive: true });
     window.addEventListener('keydown', handleArrowKeyDown);
     window.addEventListener('keyup', handleArrowKeyUp);
@@ -683,20 +731,6 @@
             <span class="jog-hud-time-current">{formatTime(jogSeekTime)}</span>
             <span class="jog-hud-time-total">/ {formatTime($arenaAudioTime.duration || 30)}</span>
           </div>
-
-          <!-- Precision Hairline Progress Gauge -->
-          <div class="jog-hud-gauge-wrap" aria-hidden="true">
-            <div class="jog-hud-gauge-track">
-              <div
-                class="jog-hud-gauge-fill"
-                style="width: {scrubPercent}; background: {$activeWinnerCard?.rarityColor || 'var(--brand-green)'};"
-              ></div>
-              <div
-                class="jog-hud-gauge-bead"
-                style="left: {scrubPercent};"
-              ></div>
-            </div>
-          </div>
         </div>
       {/if}
     </div>
@@ -712,7 +746,7 @@
   </div>
 
   <div class="winner-info {$activeWinnerCard && isNewUnlock ? 'is-new-unlock' : ''}">
-    {#if $activeWinnerCard && isNewUnlock}
+    {#if $activeWinnerCard && isNewUnlock && typeof window !== 'undefined' && window.innerWidth > 768}
       <div class="ps5-mesh-aurora-wrap" bind:this={auroraWrapEl} aria-hidden="true">
         <div class="mesh-blobs-layer">
           <div class="mesh-blob mesh-blob-1" style="--tier-color: {$activeWinnerCard.rarityColor};"></div>
@@ -731,59 +765,65 @@
       </div>
     {/if}
 
-    <div class="winner-title-row">
-      <div class="winner-title-group">
-        <div class="winner-title" id="winnerTitle">
-          {$activeWinnerCard ? $activeWinnerCard.title : 'Press ROLL to Spin Albums'}
+    <div class="winner-track-header">
+      <div class="winner-title-row">
+        <div class="winner-title-group">
+          <div class="winner-title" id="winnerTitle">
+            {$activeWinnerCard ? $activeWinnerCard.title : 'Press ROLL to Spin Albums'}
+          </div>
+          {#if $activeWinnerCard && !isNewUnlock}
+            <span
+              id="winnerCountBadge"
+              class="winner-foil-stamp is-duplicate"
+              style="--tier-color: {$activeWinnerCard.rarityColor};"
+            >
+              <span class="stamp-text">DUPLICATE</span>
+            </span>
+          {:else}
+            <span id="winnerCountBadge" class="winner-count-highlight" style="display: none;"></span>
+          {/if}
         </div>
-        {#if $activeWinnerCard && !isNewUnlock}
-          <span
-            id="winnerCountBadge"
-            class="winner-foil-stamp is-duplicate"
-            style="--tier-color: {$activeWinnerCard.rarityColor};"
-          >
-            <span class="stamp-text">DUPLICATE</span>
-          </span>
-        {:else}
-          <span id="winnerCountBadge" class="winner-count-highlight" style="display: none;"></span>
+        {#if $activeWinnerCard}
+          <div class="winner-header-actions">
+            <button
+              class="btn-star-track {isStarred ? 'is-starred' : ''}"
+              id="btnWinnerStar"
+              type="button"
+              aria-label="Star track"
+              on:click={handleStarClick}
+            >
+              <svg
+                class="star-icon"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill={isStarred ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <polygon
+                  points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                />
+              </svg>
+              <span class="star-label">{isStarred ? 'Starred' : 'Star'}</span>
+            </button>
+          </div>
         {/if}
       </div>
-      {#if $activeWinnerCard}
-        <div class="winner-header-actions">
-          <button
-            class="btn-star-track {isStarred ? 'is-starred' : ''}"
-            id="btnWinnerStar"
-            type="button"
-            aria-label="Star track"
-            on:click={handleStarClick}
-          >
-            <svg
-              class="star-icon"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <polygon
-                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-              />
-            </svg>
-            <span class="star-label">{isStarred ? 'Starred' : 'Star'}</span>
-          </button>
-        </div>
-      {/if}
-    </div>
-    <div class="winner-artist" id="winnerArtist" style={!$activeWinnerCard ? 'display: none;' : ''}>
-      <span class="artist-name">{$activeWinnerCard ? $activeWinnerCard.artist : ''}</span>
-      {#if $activeWinnerCard && formattedReleaseDate && formattedReleaseDate !== '-'}
-        <span class="winner-artist-separator" aria-hidden="true">•</span>
-        <span class="winner-release-date-wrap">
-          <span class="release-prefix">Released</span>
-          <span class="winner-release-date" id="winnerReleaseDate">{formattedReleaseDate}</span>
-        </span>
-      {/if}
+      <div class="winner-artist" id="winnerArtist">
+        {#if $activeWinnerCard}
+          <span class="artist-name">{$activeWinnerCard.artist}</span>
+          {#if formattedReleaseDate && formattedReleaseDate !== '-'}
+            <span class="winner-artist-separator" aria-hidden="true">•</span>
+            <span class="winner-release-date-wrap">
+              <span class="release-prefix">Released</span>
+              <span class="winner-release-date" id="winnerReleaseDate">{formattedReleaseDate}</span>
+            </span>
+          {/if}
+        {:else}
+          <span class="winner-initial-prompt">Tap the green ROLL button below to spin tracks.</span>
+        {/if}
+      </div>
     </div>
 
     {#if $activeWinnerCard && $activeWinnerCard.preview_url && !$unplayableTrackIds.has($activeWinnerCard.id)}
@@ -798,19 +838,19 @@
           <svg
             id="winnerMiniPlayIcon"
             class={$isArenaPlaying ? 'hidden' : ''}
-            width="12"
-            height="12"
+            width="14"
+            height="14"
             viewBox="0 0 24 24"
             fill="currentColor"
-            style={$isArenaPlaying ? 'display:none;' : 'display:block;'}
+            style={$isArenaPlaying ? 'display:none;' : 'display:block; margin-left: 1.5px;'}
           >
             <path d="M8 5v14l11-7z" />
           </svg>
           <svg
             id="winnerMiniPauseIcon"
             class={!$isArenaPlaying ? 'hidden' : ''}
-            width="12"
-            height="12"
+            width="14"
+            height="14"
             viewBox="0 0 24 24"
             fill="currentColor"
             style={!$isArenaPlaying ? 'display:none;' : 'display:block;'}
@@ -832,6 +872,10 @@
           on:pointermove={handlePointerMove}
           on:pointerup={handlePointerUp}
           on:pointercancel={handlePointerUp}
+          on:touchstart|nonpassive={handleTouchStart}
+          on:touchmove|nonpassive={handleTouchMove}
+          on:touchend={handleTouchEnd}
+          on:touchcancel={handleTouchEnd}
         >
           <div class="audio-scrub-fill" id="winnerScrubFill" style="width: {scrubPercent};"></div>
           <div class="audio-scrub-thumb" id="winnerScrubThumb" style="left: {scrubPercent};"></div>
@@ -840,55 +884,59 @@
       </div>
     {/if}
 
-    <div class="winner-footer-row">
-      <div class="winner-meta-tags">
-        <a
-          class="meta-tag source-tag"
-          id="winnerSourceLink"
-          href={$activeWinnerCard ? $activeWinnerCard.playlist_uri || $activeWinnerCard.playlist_url || '#' : '#'}
-          style={$activeWinnerCard ? 'pointer-events: auto;' : 'pointer-events: none;'}
-        >
-          <strong class="winner-source" id="winnerSource">
-            {$activeWinnerCard ? $activeWinnerCard.playlist_name : '-'}
-          </strong>
-        </a>
-      </div>
+    {#if $activeWinnerCard}
+      <div class="winner-footer-row">
+        {#if $activeWinnerCard.playlist_name}
+          <div class="winner-meta-tags">
+            <a
+              class="meta-tag source-tag"
+              id="winnerSourceLink"
+              href={$activeWinnerCard.playlist_uri || $activeWinnerCard.playlist_url || '#'}
+              style="pointer-events: auto;"
+            >
+              <strong class="winner-source" id="winnerSource">
+                {$activeWinnerCard.playlist_name}
+              </strong>
+            </a>
+          </div>
+        {/if}
 
-      {#if $activeWinnerCard && ($activeWinnerCard.spotify_url || $activeWinnerCard.playlist_url || $activeWinnerCard.uri)}
-        <a
-          class="btn-winner-spotify"
-          id="winnerSpotifyBtn"
-          href={$activeWinnerCard.source_url || $activeWinnerCard.spotify_url || $activeWinnerCard.playlist_url || $activeWinnerCard.uri}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={$activeWinnerCard.source === 'spotify' ? 'Open track on Spotify' : ($activeWinnerCard.source === 'soundcloud' ? 'Open track on SoundCloud' : 'Open track on Last.fm')}
-          on:click={handleSpotifyClick}
-        >
-          {#if $activeWinnerCard.source === 'spotify'}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path
-                d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.502 17.31c-.218.358-.68.472-1.038.254-2.846-1.738-6.427-2.13-10.648-1.167-.406.094-.813-.16-.906-.566-.094-.406.16-.813.566-.906 4.628-1.057 8.583-.615 11.77 1.332.358.218.472.68.256 1.053zm1.47-3.26c-.274.444-.86.588-1.304.314-3.259-2.003-8.228-2.583-12.083-1.413-.497.15-1.028-.135-1.178-.632-.15-.497.135-1.028.632-1.178 4.412-1.34 9.897-.692 13.62 1.599.444.274.588.86.314 1.31zm.126-3.393c-3.908-2.321-10.354-2.535-14.093-1.398-.598.182-1.233-.162-1.415-.76-.182-.598.162-1.233.76-1.415 4.301-1.306 11.418-1.054 15.908 1.611.538.319.715 1.02.396 1.558-.319.538-1.02.715-1.558.396z"
-              />
-            </svg>
-            <span>Listen on Spotify</span>
-          {:else if $activeWinnerCard.source === 'soundcloud'}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path
-                d="M23.999 14.165c-.052 1.796-1.612 3.169-3.4 3.169h-8.18a.68.68 0 0 1-.675-.683V7.862a.747.747 0 0 1 .452-.724s.75-.513 2.333-.513a5.364 5.364 0 0 1 2.763.755 5.433 5.433 0 0 1 2.57 3.54c.282-.08.574-.121.868-.12.884 0 1.73.358 2.347.992s.948 1.49.922 2.373ZM10.721 8.421c.247 2.98.427 5.697 0 8.672a.264.264 0 0 1-.53 0c-.395-2.946-.22-5.718 0-8.672a.264.264 0 0 1 .53 0ZM9.072 9.448c.285 2.659.37 4.986-.006 7.655a.277.277 0 0 1-.55 0c-.331-2.63-.256-5.02 0-7.655a.277.277 0 0 1 .556 0Zm-1.663-.257c.27 2.726.39 5.171 0 7.904a.266.266 0 0 1-.532 0c-.38-2.69-.257-5.21 0-7.904a.266.266 0 0 1 .532 0Zm-1.647.77a26.108 26.108 0 0 1-.008 7.147.272.272 0 0 1-.542 0 27.955 27.955 0 0 1 0-7.147.275.275 0 0 1 .55 0Zm-1.67 1.769c.421 1.865.228 3.5-.029 5.388a.257.257 0 0 1-.514 0c-.21-1.858-.398-3.549 0-5.389a.272.272 0 0 1 .543 0Zm-1.655-.273c.388 1.897.26 3.508-.01 5.412-.026.28-.514.283-.54 0-.244-1.878-.347-3.54-.01-5.412a.283.283 0 0 1 .56 0Zm-1.668.911c.4 1.268.257 2.292-.026 3.572a.257.257 0 0 1-.514 0c-.241-1.262-.354-2.312-.023-3.572a.283.283 0 0 1 .563 0Z"
-              />
-            </svg>
-            <span>Listen on SoundCloud</span>
-          {:else}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path
-                d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm1.8 12.5c-.8.8-1.8 1.2-3 1.2-1.3 0-2.4-.4-3.2-1.2-.8-.8-1.2-1.9-1.2-3.3 0-1.4.4-2.5 1.2-3.3.8-.8 1.9-1.2 3.2-1.2 1.2 0 2.2.4 3 1.2.7.8 1.1 1.8 1.2 3.1H13.1c-.1-.7-.3-1.2-.7-1.6-.4-.4-.9-.6-1.5-.6-.7 0-1.2.2-1.6.7-.4.5-.6 1.1-.6 2 0 .8.2 1.5.6 2 .4.5 1 .7 1.6.7.6 0 1.1-.2 1.5-.6.4-.4.6-1 .7-1.6h1.9c-.1 1.2-.5 2.2-1.2 2.9zm3.5-3.6h1.5v1.4h-1.5v3.1c0 .5.1.8.3.9.2.1.4.2.7.2.3 0 .5-.1.7-.2l.3 1.3c-.4.2-.8.3-1.3.3-.6 0-1.1-.2-1.4-.5-.3-.3-.4-.8-.4-1.4v-3.7H16v-1.4h1.3V8.8h1.4v2.1h.6z"
-              />
-            </svg>
-            <span>Listen on Last.fm</span>
-          {/if}
-        </a>
-      {/if}
-    </div>
+        {#if $activeWinnerCard.spotify_url || $activeWinnerCard.playlist_url || $activeWinnerCard.uri || $activeWinnerCard.source_url}
+          <a
+            class="btn-winner-spotify"
+            id="winnerSpotifyBtn"
+            href={$activeWinnerCard.source_url || $activeWinnerCard.spotify_url || $activeWinnerCard.playlist_url || $activeWinnerCard.uri}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={$activeWinnerCard.source === 'spotify' ? 'Open track on Spotify' : ($activeWinnerCard.source === 'soundcloud' ? 'Open track on SoundCloud' : 'Open track on Last.fm')}
+            on:click={handleSpotifyClick}
+          >
+            {#if $activeWinnerCard.source === 'spotify'}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.502 17.31c-.218.358-.68.472-1.038.254-2.846-1.738-6.427-2.13-10.648-1.167-.406.094-.813-.16-.906-.566-.094-.406.16-.813.566-.906 4.628-1.057 8.583-.615 11.77 1.332.358.218.472.68.256 1.053zm1.47-3.26c-.274.444-.86.588-1.304.314-3.259-2.003-8.228-2.583-12.083-1.413-.497.15-1.028-.135-1.178-.632-.15-.497.135-1.028.632-1.178 4.412-1.34 9.897-.692 13.62 1.599.444.274.588.86.314 1.31zm.126-3.393c-3.908-2.321-10.354-2.535-14.093-1.398-.598.182-1.233-.162-1.415-.76-.182-.598.162-1.233.76-1.415 4.301-1.306 11.418-1.054 15.908 1.611.538.319.715 1.02.396 1.558-.319.538-1.02.715-1.558.396z"
+                />
+              </svg>
+              <span>Listen on Spotify</span>
+            {:else if $activeWinnerCard.source === 'soundcloud'}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M23.999 14.165c-.052 1.796-1.612 3.169-3.4 3.169h-8.18a.68.68 0 0 1-.675-.683V7.862a.747.747 0 0 1 .452-.724s.75-.513 2.333-.513a5.364 5.364 0 0 1 2.763.755 5.433 5.433 0 0 1 2.57 3.54c.282-.08.574-.121.868-.12.884 0 1.73.358 2.347.992s.948 1.49.922 2.373ZM10.721 8.421c.247 2.98.427 5.697 0 8.672a.264.264 0 0 1-.53 0c-.395-2.946-.22-5.718 0-8.672a.264.264 0 0 1 .53 0ZM9.072 9.448c.285 2.659.37 4.986-.006 7.655a.277.277 0 0 1-.55 0c-.331-2.63-.256-5.02 0-7.655a.277.277 0 0 1 .556 0Zm-1.663-.257c.27 2.726.39 5.171 0 7.904a.266.266 0 0 1-.532 0c-.38-2.69-.257-5.21 0-7.904a.266.266 0 0 1 .532 0Zm-1.647.77a26.108 26.108 0 0 1-.008 7.147.272.272 0 0 1-.542 0 27.955 27.955 0 0 1 0-7.147.275.275 0 0 1 .55 0Zm-1.67 1.769c.421 1.865.228 3.5-.029 5.388a.257.257 0 0 1-.514 0c-.21-1.858-.398-3.549 0-5.389a.272.272 0 0 1 .543 0Zm-1.655-.273c.388 1.897.26 3.508-.01 5.412-.026.28-.514.283-.54 0-.244-1.878-.347-3.54-.01-5.412a.283.283 0 0 1 .56 0Zm-1.668.911c.4 1.268.257 2.292-.026 3.572a.257.257 0 0 1-.514 0c-.241-1.262-.354-2.312-.023-3.572a.283.283 0 0 1 .563 0Z"
+                />
+              </svg>
+              <span>Listen on SoundCloud</span>
+            {:else}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm1.8 12.5c-.8.8-1.8 1.2-3 1.2-1.3 0-2.4-.4-3.2-1.2-.8-.8-1.2-1.9-1.2-3.3 0-1.4.4-2.5 1.2-3.3.8-.8 1.9-1.2 3.2-1.2 1.2 0 2.2.4 3 1.2.7.8 1.1 1.8 1.2 3.1H13.1c-.1-.7-.3-1.2-.7-1.6-.4-.4-.9-.6-1.5-.6-.7 0-1.2.2-1.6.7-.4.5-.6 1.1-.6 2 0 .8.2 1.5.6 2 .4.5 1 .7 1.6.7.6 0 1.1-.2 1.5-.6.4-.4.6-1 .7-1.6h1.9c-.1 1.2-.5 2.2-1.2 2.9zm3.5-3.6h1.5v1.4h-1.5v3.1c0 .5.1.8.3.9.2.1.4.2.7.2.3 0 .5-.1.7-.2l.3 1.3c-.4.2-.8.3-1.3.3-.6 0-1.1-.2-1.4-.5-.3-.3-.4-.8-.4-1.4v-3.7H16v-1.4h1.3V8.8h1.4v2.1h.6z"
+                />
+              </svg>
+              <span>Listen on Last.fm</span>
+            {/if}
+          </a>
+        {/if}
+      </div>
+    {/if}
   </div>
 </section>
 </div>

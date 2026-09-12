@@ -314,9 +314,15 @@
 
     <div class="binder-scroll-area">
       <div class="binder-content-wrap" id="binderGridFull">
-      {#if displayedCards.length === 0}
-        <div class="binder-empty-card">
-          <div class="binder-empty-icon">&#128451;</div>
+        {#if displayedCards.length === 0}
+          <div class="binder-empty-card">
+          <div class="binder-empty-icon" aria-hidden="true">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="var(--brand-green)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+              <path d="m3.3 7 8.7 5 8.7-5" />
+              <path d="M12 22V12" />
+            </svg>
+          </div>
           <div class="binder-empty-title">
             {currentFilter === 'starred'
               ? 'No starred tracks yet'

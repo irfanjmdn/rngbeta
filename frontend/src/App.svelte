@@ -51,20 +51,19 @@
 
   $: isWindowTooSmall = windowWidth > 0 && (windowWidth <= 768 || windowHeight <= 500);
 
-  // Whenever window expands to normal desktop size, reset dismissed flag so it warns again on future shrinkage
   $: if (!isWindowTooSmall) {
     hasDismissedSmallScreenWarning = false;
   }
 
-  $: showScreenWarning = isWindowTooSmall && !hasDismissedSmallScreenWarning;
-
-  let isInitialLoading = true;
-  let isHidingSplash = false;
+  $: showScreenWarning = $isCrateReady && isWindowTooSmall && !hasDismissedSmallScreenWarning;
 
   function handleDismissScreenWarning() {
     playLogoutSquareSound(1);
     hasDismissedSmallScreenWarning = true;
   }
+
+  let isInitialLoading = true;
+  let isHidingSplash = false;
 
   let reelComponent;
   let arenaAudioEl;
@@ -256,7 +255,7 @@
       });
     }
 
-    // Prepare and start next player from beginning with matching 600ms fade-in to 0.25
+    // Prepare and start next player from beginning with matching 600ms fade-in to 0.18
     if (nextEl.src !== curEl.src) {
       nextEl.src = curEl.src;
     }
@@ -273,7 +272,9 @@
       } else {
         arenaFadeIntervalB = nextFade;
       }
-    }).catch(() => {});
+    }).catch(() => {
+      isTransitioningToLoop = false;
+    });
   }
 
   function toggleArenaAudio() {
@@ -563,8 +564,8 @@
 
     if (hasPreview) {
       const activeEl = getActiveArenaEl();
-      const directMatch = winner.preview_url && activeEl.src && activeEl.src.includes(winner.preview_url);
-      const proxyMatch = winner.stream_proxy_url && activeEl.src && activeEl.src.includes(winner.stream_proxy_url);
+      const directMatch = winner.preview_url && activeEl?.src && activeEl.src.includes(winner.preview_url);
+      const proxyMatch = winner.stream_proxy_url && activeEl?.src && activeEl.src.includes(winner.stream_proxy_url);
       if (activeEl && !activeEl.paused && activeEl.src && (directMatch || proxyMatch)) {
         // Same track is already playing; restore full volume and normal EQ smoothly
         isArenaBgLooping = false;
@@ -610,7 +611,8 @@
   // Arena audio engages the 500Hz lowpass filter and ducks during spinning
   $: {
     const activeEl = getActiveArenaEl();
-    const shouldFilter = $isSpinning || isArenaBgLooping;
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+    const shouldFilter = ($isSpinning || isArenaBgLooping) && !isMobile;
     // Faster, snappier lowpass ramp-down on roll launch (40ms vs 200ms)
     const timeConstant = $isSpinning ? 0.04 : 0.15;
     setArenaLowpassFilter(shouldFilter, 500, 100, timeConstant);
@@ -619,9 +621,9 @@
       const shouldDuck = $isSpinning || Boolean($activeModal);
       let targetVol = 1.0;
       if (isArenaBgLooping) {
-        targetVol = shouldDuck ? 0.08 : 0.25;
+        targetVol = shouldDuck ? (isMobile ? 0.04 : 0.08) : (isMobile ? 0.12 : 0.25);
       } else {
-        targetVol = shouldDuck ? 0.25 : 1.0;
+        targetVol = shouldDuck ? (isMobile ? 0.12 : 0.25) : 1.0;
       }
       if (activeArenaPlayerId === 'A') {
         if (arenaFadeInterval) {
@@ -986,6 +988,8 @@
     aria-hidden="true"
   ></div>
 
+
+
   <!-- 2. Small Screen Warning Overlay -->
   {#if showScreenWarning}
     <div
@@ -997,29 +1001,12 @@
       aria-describedby="screenWarningDesc"
     >
       <div class="screen-warning-card">
-        <svg
-          class="screen-warning-icon"
-          width="28"
-          height="28"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <rect x="2" y="3" width="20" height="14" rx="1" />
-          <line x1="8" y1="21" x2="16" y2="21" />
-          <line x1="12" y1="17" x2="12" y2="21" />
-        </svg>
-
         <h2 class="screen-warning-title" id="screenWarningTitle">
-          Desktop Screen Recommended
+          Desktop Recommended
         </h2>
 
         <p class="screen-warning-desc" id="screenWarningDesc">
-          Optimized for wider displays (768px+). Mobile and small windows are not recommended.
+          Track RNG is built for desktop screens. The mobile interface is currently in development.
         </p>
 
         <button
@@ -1028,7 +1015,7 @@
           id="btnDismissScreenWarning"
           on:click={handleDismissScreenWarning}
         >
-          Continue Anyway
+          Continue to Mobile
         </button>
       </div>
     </div>
@@ -1119,9 +1106,6 @@
     }}
     on:error={() => handleArenaAudioError('A')}
     on:seeked={() => handleArenaSeeked('A')}
-    on:ended={() => {
-      if (!isTransitioningToLoop) triggerPingPongLoopTransition();
-    }}
   ></audio>
 
   <audio
@@ -1167,9 +1151,6 @@
     }}
     on:error={() => handleArenaAudioError('B')}
     on:seeked={() => handleArenaSeeked('B')}
-    on:ended={() => {
-      if (!isTransitioningToLoop) triggerPingPongLoopTransition();
-    }}
   ></audio>
 
   <audio

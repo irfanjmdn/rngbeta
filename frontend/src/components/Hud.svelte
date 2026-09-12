@@ -18,6 +18,8 @@
     isCrateReady,
     isSpinning,
     isAutoRolling,
+    isArenaPlaying,
+    arenaAudioTime,
     isLoggingOut,
   } from '../lib/store.js';
   import {
@@ -31,6 +33,7 @@
     setArenaReverbWet,
     fadeInMusic,
   } from '../lib/audio.js';
+  import { triggerHaptic } from '../lib/haptics.js';
 
   let isCollapsed = false;
   let isHovered = false;
@@ -81,6 +84,22 @@
     });
 
     prevMasteryCount = $unlockedCount || 0;
+  }
+
+  // Dynamic context-aware header state
+  $: isSpinningActive = Boolean($isSpinning);
+  $: isPlayingActive = Boolean($isArenaPlaying && !isSpinningActive);
+  $: currentAudioSec = Math.floor($arenaAudioTime?.current || 0);
+  $: totalAudioSec = Math.floor($arenaAudioTime?.duration || 30);
+  $: audioPercent = totalAudioSec > 0
+    ? Math.min(100, Math.max(0, (($arenaAudioTime?.current || 0) / totalAudioSec) * 100))
+    : 0;
+
+  function formatHeaderTime(sec) {
+    if (!sec || isNaN(sec) || sec < 0) return '0:00';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
   }
 
   // Hold-to-logout state
@@ -198,15 +217,59 @@
     circleOriginY = rect.top + rect.height / 2;
   }
 
-  // Max radius: distance from bottom-left button to top-right corner + margin
+  // Max radius: distance from origin to farthest corner + margin to guarantee 100% fullscreen coverage
   $: maxRadius = typeof window !== 'undefined'
-    ? Math.hypot(window.innerWidth - circleOriginX, circleOriginY) * 1.15
-    : 2000;
+    ? Math.hypot(
+        Math.max(circleOriginX, window.innerWidth - circleOriginX),
+        Math.max(circleOriginY, window.innerHeight - circleOriginY)
+      ) * 1.35
+    : 2500;
   $: currentRadius = holdProgress * maxRadius;
   $: clipPath = holdProgress > 0 || holdCompleted
     ? `circle(${holdCompleted ? maxRadius : currentRadius}px at ${circleOriginX}px ${circleOriginY}px)`
     : 'circle(0px at 0px 0px)';
   $: showOverlay = holdProgress > 0 || holdCompleted || showSquares || squaresFilled > 0;
+
+  let isLogoutAnimating = false;
+
+  function handleInstantLogout(e) {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    if ($isSpinning || holdCompleted || isLogoutAnimating) return;
+    isLogoutAnimating = true;
+    clearCancelTimers();
+    if (holdAnimFrame) {
+      cancelAnimationFrame(holdAnimFrame);
+      holdAnimFrame = null;
+    }
+    computeCircleOrigin();
+    playLogoutConfirmSound();
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([40, 30, 60]);
+    }
+
+    const startTime = performance.now();
+    const animDuration = 320; // 320ms smooth expanding circle wipe
+
+    function animateWipe(now) {
+      const elapsed = now - startTime;
+      const linear = Math.min(1, elapsed / animDuration);
+      holdProgress = Math.pow(linear, 1.8);
+
+      if (linear < 1) {
+        holdAnimFrame = requestAnimationFrame(animateWipe);
+      } else {
+        holdProgress = 1;
+        holdCompleted = true;
+        holdAnimFrame = null;
+        setTimeout(() => {
+          executeSwitchAccount();
+          isLogoutAnimating = false;
+        }, 60);
+      }
+    }
+
+    holdAnimFrame = requestAnimationFrame(animateWipe);
+  }
 
   function executeSwitchAccount() {
     if ($isSpinning) return;
@@ -249,7 +312,12 @@
 
   function handleHoldStart(e) {
     if ($isSpinning || holdCompleted) return;
-    if (e.button && e.button !== 0) return;
+    if (e && e.button && e.button !== 0) return;
+    if (e && e.currentTarget && typeof e.currentTarget.setPointerCapture === 'function' && e.pointerId != null) {
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch (err) {}
+    }
     clearCancelTimers();
     if (holdAnimFrame) {
       cancelAnimationFrame(holdAnimFrame);
@@ -339,7 +407,14 @@
     holdAnimFrame = requestAnimationFrame(runHoldLoop);
   }
 
-  function handleHoldEnd() {
+  function handleHoldEnd(e) {
+    if (e && e.currentTarget && typeof e.currentTarget.releasePointerCapture === 'function' && e.pointerId != null) {
+      try {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+      } catch (err) {}
+    }
     if (hoverTimer) {
       clearTimeout(hoverTimer);
       hoverTimer = null;
@@ -360,7 +435,14 @@
     }, 200);
   }
 
-  function handlePointerLeave() {
+  function handlePointerLeave(e) {
+    if (e && e.currentTarget && typeof e.currentTarget.hasPointerCapture === 'function' && e.pointerId != null) {
+      try {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          return;
+        }
+      } catch (err) {}
+    }
     if (hoverTimer) {
       clearTimeout(hoverTimer);
       hoverTimer = null;
@@ -466,7 +548,9 @@
   function handleKeyDown(e) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      if (!isHolding) {
+      if (isMobile) {
+        handleInstantLogout(e);
+      } else if (!isHolding) {
         handleHoldStart(e);
       }
     }
@@ -474,13 +558,16 @@
 
   function handleKeyUp(e) {
     if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      handleHoldEnd();
+      if (!isMobile && isHolding) {
+        e.preventDefault();
+        handleHoldEnd();
+      }
     }
   }
 
   function handleSelectTab(tabName) {
     playUiTapSound();
+    triggerHaptic('selection');
     if (tabName === 'arena') {
       activeModal.set(null);
     } else if (tabName === 'binder') {
@@ -502,6 +589,7 @@
 
   function handleCloseBinder() {
     playUiTapSound();
+    triggerHaptic('selection');
     activeModal.set(null);
   }
 
@@ -537,10 +625,14 @@
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if ($activeModal) return;
-      if (!$isCrateReady || $isSpinning || holdCompleted) return;
+      if (!$isCrateReady || $isSpinning || holdCompleted || isLogoutAnimating) return;
       if (e.repeat) return;
       e.preventDefault();
-      handleHoldStart(e);
+      if (isMobile) {
+        handleInstantLogout(e);
+      } else if (!isHolding) {
+        handleHoldStart(e);
+      }
     }
   }
 
@@ -549,7 +641,7 @@
       isShiftActive = false;
     }
     if (e.key === 'Escape') {
-      if (isHolding) {
+      if (!isMobile && isHolding) {
         e.preventDefault();
         handleHoldEnd(e);
       }
@@ -609,97 +701,114 @@
   {#if isMobile}
     <!-- Mobile Top App Bar -->
     <header class="hud-mobile-top-bar" class:is-above-overlay={showOverlay} aria-label="Mobile Navigation and Player profile">
-      <div class="hud-brand-pill">
-        <button
-          class="hud-logo-mark"
-          id="btnSwitchAccount"
-          type="button"
-          aria-label="Hold to Switch Profile"
-          style="--hold-progress: {holdProgress};"
-          class:is-holding={isHolding}
-          bind:this={logoutBtnEl}
-          on:pointerenter={handlePointerEnter}
-          on:pointerdown={handleHoldStart}
-          on:pointerup={handleHoldEnd}
-          on:pointerleave={handlePointerLeave}
-          on:pointercancel={handlePointerLeave}
-          on:blur={handlePointerLeave}
-          on:keydown={handleKeyDown}
-          on:keyup={handleKeyUp}
-        >
-          <span class="logout-default-icon">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square" stroke-linejoin="miter" class="logout-lightning-icon" aria-hidden="true">
-              <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
-              <line x1="12" y1="2" x2="12" y2="12" />
-            </svg>
-          </span>
-        </button>
-
-        <div class="hud-avatar-wrap">
-          {#if $userAvatarUrl}
-            <img class="hud-avatar-img" src={$userAvatarUrl} alt="User profile" />
-          {:else}
-            <div class="hud-avatar-placeholder">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-                <circle cx="12" cy="7" r="4"></circle>
+      {#if $activeModal === null}
+        <!-- OPTION 2: MINIMALIST PRECISION BANNER -->
+        <div class="hud-brand-pill hud-mobile-pilot-pill" class:is-above-overlay={showOverlay} aria-label="Pilot Identity">
+          <button
+            class="hud-logout-btn"
+            id="btnSwitchAccount"
+            type="button"
+            aria-label="Log Out"
+            title="Log Out"
+            bind:this={logoutBtnEl}
+            on:click={handleInstantLogout}
+            on:keydown={handleKeyDown}
+          >
+            <span class="logout-default-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" class="logout-icon" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
               </svg>
+            </span>
+          </button>
+
+          {#if $userAvatarUrl}
+            <div class="hud-avatar-wrap">
+              <img class="hud-avatar-img" src={$userAvatarUrl} alt="User profile" />
             </div>
           {/if}
+
+          <div class="hud-brand-titles">
+            <div
+              class="hud-brand-title"
+              class:is-logout-state={brandDisplayState !== 'default'}
+              class:is-holding={brandDisplayState === 'holding'}
+              class:is-released={brandDisplayState === 'released'}
+            >
+              {#key isKaomojiActive}
+                <div class="hud-brand-text-slide" transition:fade={{ duration: 100 }}>
+                  {#if isKaomojiActive}
+                    <span class="hud-brand-kaomoji" class:is-holding-red={isHolding && isHoldRed}>
+                      {brandDisplayState === 'holding' ? currentHoldKaomoji : currentReleaseKaomoji}
+                    </span>
+                  {:else}
+                    <span class="hud-brand-default-text">TRACK RNG</span>
+                  {/if}
+                </div>
+              {/key}
+            </div>
+            <div class="hud-brand-sub" id="hudAccountSub">
+              @{$activeUserId || 'PILOT'}
+            </div>
+          </div>
         </div>
 
-        <div class="hud-brand-titles">
-          <div
-            class="hud-brand-title"
-            class:is-logout-state={brandDisplayState !== 'default'}
-            class:is-holding={brandDisplayState === 'holding'}
-            class:is-released={brandDisplayState === 'released'}
-          >
-            {#key isKaomojiActive}
-              <div class="hud-brand-text-slide" transition:fade={{ duration: 100 }}>
-                {#if isKaomojiActive}
-                  <span class="hud-brand-kaomoji" class:is-holding-red={isHolding && isHoldRed}>
-                    {brandDisplayState === 'holding' ? currentHoldKaomoji : currentReleaseKaomoji}
+        <!-- Right Minimalist Precision Telemetry Module -->
+        <button
+          class="hud-mobile-telemetry-btn"
+          type="button"
+          on:click={() => handleSelectTab('binder')}
+          aria-label="Open Catalogue - {$unlockedCount} of {$rngTracks.length} unlocked"
+        >
+          <div class="telemetry-metrics-row">
+            <div class="mobile-mastery-counter">
+              <span id="hudMasteryVal" class="monolith-mastery-val" aria-label="{$unlockedCount}">
+                {#each masteryDigits as d (d.key)}
+                  <span class="tally-digit-slot">
+                    <span class="tally-digit-char" class:is-rolling={d.hasChanged}>{d.char}</span>
                   </span>
-                {:else}
-                  <span class="hud-brand-default-text">Track RNG</span>
-                  <span class="hud-beta-badge">BETA</span>
-                {/if}
-              </div>
-            {/key}
+                {/each}
+              </span>
+              <span class="sep">/</span>
+              <span id="hudMasteryTotal">{$rngTracks.length}</span>
+            </div>
+            <div class="mobile-rolls-counter">
+              <span id="hudRolls" class="monolith-rolls-val">{$gameRolls}</span>
+              <span class="mobile-rolls-unit">ROLLS</span>
+            </div>
           </div>
-          <div class="hud-brand-sub" id="hudAccountSub" class:is-hint-active={showLogoutHint}>
-            {showLogoutHint ? 'Hold button to log out' : `${$activeUserId || 'Username'} / ${$rngTracks.length} Tracks`}
+        </button>
+      {:else}
+        <!-- DISTILLED MODAL VIEWS HEADER (Catalogue, Rates, Settings) -->
+        <div class="hud-mobile-view-header">
+          <div class="hud-mobile-view-text">
+            {#if $activeModal === 'binder'}
+              <h1 class="hud-mobile-view-title">TRACK CATALOGUE</h1>
+              <span class="hud-mobile-view-sub">{$unlockedCount} / {$rngTracks.length} unlocked ({Math.round(($unlockedCount / ($rngTracks.length || 1)) * 100)}%)</span>
+            {:else if $activeModal === 'rates'}
+              <h1 class="hud-mobile-view-title">DROP RATES &amp; ODDS</h1>
+              <span class="hud-mobile-view-sub">CALIBRATED TO {$rngTracks.length} TRACKS</span>
+            {:else if $activeModal === 'settings'}
+              <h1 class="hud-mobile-view-title">SETTINGS &amp; PREFERENCES</h1>
+              <span class="hud-mobile-view-sub">AUDIO &middot; HAPTICS &middot; REEL</span>
+            {/if}
           </div>
-        </div>
-      </div>
 
-      <!-- Mobile Mastery Status Pill -->
-      <div class="hud-mobile-mastery-chip" aria-label="Collection Mastery">
-        <div class="mobile-mastery-row">
-          <span class="mobile-mastery-title">UNLOCKED</span>
-          <div class="mobile-mastery-counter">
-            <span id="hudMasteryVal" class="monolith-mastery-val" aria-label="{$unlockedCount}">
-              {#each masteryDigits as d (d.key)}
-                <span class="tally-digit-slot">
-                  <span class="tally-digit-char" class:is-rolling={d.hasChanged}>{d.char}</span>
-                </span>
-              {/each}
-            </span>
-            <span class="sep">/</span>
-            <span id="hudMasteryTotal">{$rngTracks.length}</span>
-          </div>
-          <span id="hudRolls" class="monolith-rolls-val mobile-rolls-tag">{$gameRolls}R</span>
+          <button
+            class="btn-hud-mobile-close"
+            type="button"
+            aria-label="Return to Arena"
+            on:click={() => handleSelectTab('arena')}
+          >
+            <span>ARENA</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </div>
-        <div class="monolith-rarity-track mobile-rarity-track">
-          {#if commonPct > 0}<div class="rarity-slice slice-common" style="width: {commonPct}%;"></div>{/if}
-          {#if uncommonPct > 0}<div class="rarity-slice slice-uncommon" style="width: {uncommonPct}%;"></div>{/if}
-          {#if rarePct > 0}<div class="rarity-slice slice-rare" style="width: {rarePct}%;"></div>{/if}
-          {#if epicPct > 0}<div class="rarity-slice slice-epic" style="width: {epicPct}%;"></div>{/if}
-          {#if legendaryPct > 0}<div class="rarity-slice slice-legendary" style="width: {legendaryPct}%;"></div>{/if}
-          {#if mythicPct > 0}<div class="rarity-slice slice-mythic" style="width: {mythicPct}%;"></div>{/if}
-        </div>
-      </div>
+      {/if}
     </header>
 
     <!-- Mobile Bottom Navigation Bar (Dock) -->
@@ -789,12 +898,13 @@
 
   <!-- 1. Bottom-Left Corner: Brand & Profile Info -->
   <aside class="hud-corner-left" class:is-above-overlay={showOverlay} aria-label="Player profile and crate information">
-    <div class="hud-brand-pill">
+    <div class="hud-brand-pill" class:is-above-overlay={showOverlay}>
       <button
-        class="hud-logo-mark"
+        class="hud-logout-btn hud-logo-mark"
         id="btnSwitchAccount"
         type="button"
-        aria-label="Hold to Switch Profile"
+        aria-label="Hold to Log Out"
+        title="Hold to Log Out"
         style="--hold-progress: {holdProgress};"
         class:is-holding={isHolding}
         bind:this={logoutBtnEl}
@@ -808,10 +918,10 @@
         on:keyup={handleKeyUp}
       >
         <span class="logout-default-icon">
-          <!-- Geometric Hardware Power / Exit Icon -->
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square" stroke-linejoin="miter" class="logout-lightning-icon" aria-hidden="true">
-            <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
-            <line x1="12" y1="2" x2="12" y2="12" />
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" class="logout-icon" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
         </span>
       </button>
@@ -849,7 +959,7 @@
           {/key}
         </div>
         <div class="hud-brand-sub" id="hudAccountSub" class:is-hint-active={showLogoutHint}>
-          {showLogoutHint ? 'Hold button to log out' : `${$activeUserId || 'Username'} / ${$rngTracks.length} Tracks`}
+          {showLogoutHint ? 'Hold button to log out' : `@${$activeUserId || 'PILOT'}`}
         </div>
       </div>
     </div>

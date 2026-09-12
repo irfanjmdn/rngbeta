@@ -1,5 +1,15 @@
 <script>
-  import { activeModal } from '../lib/store.js';
+  import {
+    activeModal,
+    isCrateReady,
+    rngTracks,
+    activeUserId,
+    activeMode,
+    isAutoRolling,
+    activeWinnerCard,
+    activeArenaTrack,
+    activeBinderTrack,
+  } from '../lib/store.js';
   import {
     getSfxVolume,
     setSfxVolume,
@@ -8,25 +18,33 @@
     playSampledSound,
     playMechanicalBrakeSound,
     playStarSound,
+    stopAllMediaAudio,
+    setArenaLowpassFilter,
+    setArenaReverbWet,
+    fadeInMusic,
+    playLogoutConfirmSound,
   } from '../lib/audio.js';
 
   let currentPercent = Math.round(getSfxVolume() * 100);
   let musicPercent = Math.round(getMusicVolume() * 100);
-  let lastfmApiKey = typeof localStorage !== 'undefined' ? (localStorage.getItem('crate_lastfm_api_key') || '') : '';
-
-  function handleLastfmKeyInput(e) {
-    lastfmApiKey = (e.target.value || '').trim();
-    if (typeof localStorage !== 'undefined') {
-      if (lastfmApiKey) {
-        localStorage.setItem('crate_lastfm_api_key', lastfmApiKey);
-      } else {
-        localStorage.removeItem('crate_lastfm_api_key');
-      }
-    }
-  }
 
   function closeModal() {
     activeModal.set(null);
+  }
+
+  function handleSwitchCrate() {
+    closeModal();
+    setArenaLowpassFilter(false, 20000, 20000, 0.02);
+    setArenaReverbWet(0, 0.02);
+    stopAllMediaAudio();
+    fadeInMusic(0);
+    playLogoutConfirmSound();
+    isAutoRolling.set(false);
+    activeWinnerCard.set(null);
+    activeArenaTrack.set(null);
+    activeBinderTrack.set(null);
+    rngTracks.set([]);
+    isCrateReady.set(false);
   }
 
   function handleBackdropClick(e) {
@@ -168,23 +186,26 @@
         </div>
       </div>
 
-      <!-- Last.fm API Key Section -->
-      <div class="settings-section">
+
+      <!-- Crate & Profile Section -->
+      <div class="settings-section settings-profile-section">
         <div class="settings-row">
           <div class="settings-info">
-            <div class="settings-label">Last.fm API Key (Optional)</div>
-            <div class="settings-sublabel">Personal API key to bypass shared rate limits. Leave blank to use built-in pool.</div>
+            <div class="settings-label">Active Crate</div>
+            <div class="settings-sublabel">
+              {$activeUserId ? `@${$activeUserId}` : 'Active user'} &bull; {$rngTracks.length} tracks &bull; {($activeMode || 'lastfm').toUpperCase()}
+            </div>
           </div>
         </div>
-        <div class="settings-input-wrap">
-          <input
-            type="text"
-            class="settings-text-input"
-            id="lastfmApiKeyInput"
-            placeholder="Paste 32-character API key..."
-            value={lastfmApiKey}
-            on:input={handleLastfmKeyInput}
-          />
+        <div class="settings-actions-row">
+          <button
+            type="button"
+            class="btn-settings-switch-crate"
+            id="btnSettingsSwitchCrate"
+            on:click={handleSwitchCrate}
+          >
+            Switch Crate / Profile
+          </button>
         </div>
       </div>
     </div>

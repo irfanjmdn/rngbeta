@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import {
     rngTracks,
+    isCrateReady,
     isSpinning,
     reelVelocity,
     reelCurrentX,
@@ -15,6 +16,7 @@
     gameRolls,
     starredTrackIds,
     saveUserData,
+    isArenaPlaying,
   } from '../lib/store.js';
   import {
     playTickSound,
@@ -26,9 +28,11 @@
     playNearMissSound,
     playTierLandingSound,
     getAudioContext,
+    getTargetBassPeakMetrics,
   } from '../lib/audio.js';
   import { isPlaceholderCover, clientArtCache, fetchTrackDetails, fetchTrackPreview } from '../lib/artCache.js';
   import { resolveSoundCloudStreamUrl } from '../lib/modes/soundcloudEngine.js';
+  import { triggerHaptic, triggerThrottledHaptic } from '../lib/haptics.js';
 
   export let onRollComplete = () => {};
 
@@ -51,6 +55,22 @@
   let driftRafId = null;
   let currentTranslateX = 0;
   const preloadedAudioMap = new Map();
+  const MAX_PRELOADED_AUDIO = 6;
+
+  function prunePreloadedAudio() {
+    while (preloadedAudioMap.size > MAX_PRELOADED_AUDIO) {
+      const oldestKey = preloadedAudioMap.keys().next().value;
+      const oldAudio = preloadedAudioMap.get(oldestKey);
+      if (oldAudio) {
+        try {
+          oldAudio.pause();
+          oldAudio.src = '';
+          oldAudio.load();
+        } catch (e) {}
+      }
+      preloadedAudioMap.delete(oldestKey);
+    }
+  }
   let upcomingRollQueue = [];
 
   let spinStartTime = 0;
@@ -73,6 +93,7 @@
           audio.preload = 'auto';
           audio.src = directUrl;
           preloadedAudioMap.set(directUrl, audio);
+          prunePreloadedAudio();
         }
       });
     } else {
@@ -82,6 +103,7 @@
           audio.preload = 'auto';
           audio.src = pUrl;
           preloadedAudioMap.set(pUrl, audio);
+          prunePreloadedAudio();
         }
       });
     }
@@ -193,11 +215,13 @@
     const textColor = ['legendary', 'uncommon', 'common'].includes(card.rarityTier) ? '#080B11' : '#FFFFFF';
 
     div.innerHTML = `
-      <div class="reel-card-art-wrap">
-        <img class="reel-card-art ${isPlaceholder ? 'is-placeholder-art' : ''}" src="${albumCover}" alt="${htmlEscape(card.title)}" loading="lazy" />
+      <div class="reel-card-body">
+        <div class="reel-card-art-wrap">
+          <img class="reel-card-art ${isPlaceholder ? 'is-placeholder-art' : ''}" src="${albumCover}" alt="${htmlEscape(card.title)}" loading="lazy" />
+        </div>
+        <div class="reel-card-title">${htmlEscape(card.title)}</div>
+        <div class="reel-card-artist">${htmlEscape(card.artist)}</div>
       </div>
-      <div class="reel-card-title">${htmlEscape(card.title)}</div>
-      <div class="reel-card-artist">${htmlEscape(card.artist)}</div>
       <div class="reel-card-tier-banner" style="background-color: ${card.rarityColor}; color: ${textColor};">${htmlEscape(card.rarityName.toUpperCase())}</div>
     `;
 
@@ -213,19 +237,25 @@
     return div;
   }
 
-  const CARD_WIDTH = 136;
+  const isMobileInitial = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+  const CARD_WIDTH = 148;
   const CARD_MARGIN = 6;
-  let cardTotalWidth = CARD_WIDTH + CARD_MARGIN * 2; // 148px
+  let cardTotalWidth = isMobileInitial ? (158 + 14) : (CARD_WIDTH + CARD_MARGIN * 2); // 172px mobile, 160px desktop
   let cachedViewportWidth = 0;
 
   function measureDimensions() {
     if (!reelViewport) return;
     cachedViewportWidth = reelViewport.clientWidth || 1024;
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+    const fallbackWidth = isMobile ? 158 : CARD_WIDTH;
     const firstCard = reelTrack?.firstElementChild;
-    if (firstCard) {
-      const w = firstCard.offsetWidth;
+    if (firstCard && typeof window !== 'undefined') {
+      const style = window.getComputedStyle(firstCard);
+      const marginLeft = parseFloat(style.marginLeft) || 0;
+      const marginRight = parseFloat(style.marginRight) || 0;
+      const w = firstCard.offsetWidth || parseFloat(style.width) || fallbackWidth;
       if (w > 0) {
-        cardTotalWidth = w + CARD_MARGIN * 2;
+        cardTotalWidth = w + marginLeft + marginRight;
       }
     }
   }
@@ -258,16 +288,17 @@
       const dist = Math.abs(centerX - cardCenterX);
       const normDist = Math.min(dist / maxDist, 1);
 
-      // Parabolic arched bridge drop: y = normDist^2 * 38px
-      const translateY = Math.pow(normDist, 2) * 38;
+      // Parabolic arched bridge drop: y = normDist^2 * 38px (disabled on mobile for flat precision alignment)
+      const isMobileReel = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+      const translateY = isMobileReel ? 0 : Math.pow(normDist, 2) * 38;
 
-      // Tangential tilt outward
+      // Tangential tilt outward (disabled on mobile for flat alignment)
       const direction = cardCenterX < centerX ? -1 : 1;
-      const rotateZ = direction * Math.pow(normDist, 1.15) * 7.5;
+      const rotateZ = isMobileReel ? 0 : direction * Math.pow(normDist, 1.15) * 7.5;
 
       const scale = 1 - normDist * 0.26;
       const opacity = Math.max(0.68, 1 - normDist * 0.35);
-      const blur = normDist > 0.22 ? Math.pow((normDist - 0.22) / 0.78, 1.35) * 4.2 : 0;
+      const blur = isMobileReel ? 0 : (normDist > 0.22 ? Math.pow((normDist - 0.22) / 0.78, 1.35) * 4.2 : 0);
 
       card.style.setProperty('--card-translate-y', `${translateY.toFixed(2)}px`);
       card.style.setProperty('--card-rotate-z', `${rotateZ.toFixed(2)}deg`);
@@ -347,6 +378,13 @@
       cancelAnimationFrame(rollRafId);
       rollRafId = null;
     }
+    if (reelAudioRafId) {
+      cancelAnimationFrame(reelAudioRafId);
+      reelAudioRafId = null;
+    }
+    currentReelBassScale = 1.0;
+    reelSmoothedBass = 0;
+    reelImpactSpike = 0;
     reelVelocity.set(0);
     reelCurrentX.set(null);
     if (reelPointerTop) reelPointerTop.classList.remove('pointer-engaging', 'caliper-pinch');
@@ -372,13 +410,6 @@
       driftRafId = null;
     }
 
-    isDriftingActive = true;
-    reelTrack.style.transition = 'none';
-    const driftSpeed = 30; // slightly slower pixels per second
-    const rampDuration = 1000; // ms to smoothly ease into continuous drift
-    const startTime = performance.now();
-    let lastTime = startTime;
-
     // Return the selected winner card back to its original state 1 second after drift begins
     winnerUnselectTimer = setTimeout(() => {
       const landedWinner = reelTrack?.querySelector('.reel-card.winner-landed');
@@ -387,6 +418,22 @@
       }
       winnerUnselectTimer = null;
     }, 1000);
+
+    // On mobile devices, cut corners on continuous RAF loops by using a GPU hardware CSS transition
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      isDriftingActive = false;
+      currentTranslateX -= 40;
+      reelTrack.style.transition = 'transform 2.2s cubic-bezier(0.22, 1, 0.36, 1)';
+      reelTrack.style.transform = `translateX(${currentTranslateX.toFixed(2)}px)`;
+      return;
+    }
+
+    isDriftingActive = true;
+    reelTrack.style.transition = 'none';
+    const driftSpeed = 30; // continuous pixels per second
+    const rampDuration = 1000; // ms to smoothly ease into continuous drift
+    const startTime = performance.now();
+    let lastTime = startTime;
 
     function driftStep(now) {
       if ($isSpinning || !reelTrack || !reelViewport) {
@@ -610,12 +657,14 @@
             const progress = Math.min(1, (currentCard - START_INDEX) / (WINNER_INDEX - START_INDEX));
             playTickSound(progress);
             lastTickAudioTime = nowTick;
+            triggerThrottledHaptic('selection', 28);
 
             // Near-miss suspense flutter on Mythic or Legendary cards during braking
             if (progress > 0.82) {
               const passingCard = reelTrack.children[currentCard]?._cardData;
               if (passingCard && (passingCard.rarityTier === 'mythic' || passingCard.rarityTier === 'legendary')) {
                 playNearMissSound();
+                triggerHaptic('light');
               }
             }
           }
@@ -683,9 +732,14 @@
       }
       updateReelScales(finalTranslateX, true);
 
-      // Audio effects
+      // Audio and haptic effects
       playTierLandingSound(winner.rarityTier);
       playFanfareSound(winner.rarityTier);
+      if (winner.rarityTier === 'mythic' || winner.rarityTier === 'legendary') {
+        triggerHaptic('heavy');
+      } else {
+        triggerHaptic('medium');
+      }
 
       // Reveal winner spotlight
       activeWinnerCard.set(winner);
@@ -696,10 +750,10 @@
         autoRollTimer = setTimeout(executeSpin, $isAutoSkip ? 1200 : 3000);
       }
 
-      // Start slow forward drift about 2 seconds after aligning to chosen card
+      // Start slow forward drift about 1.35 seconds after aligning to chosen card
       postRollDriftTimer = setTimeout(() => {
         startPostRollDrift();
-      }, 2000);
+      }, 1350);
     }
 
     if ($isAutoSkip) {
@@ -806,6 +860,74 @@
     }
   }
 
+  let reelAudioRafId = null;
+  let reelSmoothedBass = 0;
+  let reelImpactSpike = 0;
+  let currentReelBassScale = 1.0;
+
+  function tickReelAudio() {
+    if (typeof document !== 'undefined' && document.hidden) {
+      reelAudioRafId = null;
+      return;
+    }
+
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+    if (!isMobile) {
+      reelAudioRafId = null;
+      return;
+    }
+
+    if ($isArenaPlaying && !$isSpinning) {
+      const metrics = getTargetBassPeakMetrics(20, 150);
+      const rawEnergy = metrics.energy;
+
+      if (rawEnergy > reelSmoothedBass) {
+        reelSmoothedBass += (rawEnergy - reelSmoothedBass) * 0.48;
+      } else {
+        reelSmoothedBass += (rawEnergy - reelSmoothedBass) * 0.09;
+      }
+
+      if (metrics.peak > reelImpactSpike) {
+        reelImpactSpike = metrics.peak;
+      } else {
+        reelImpactSpike *= 0.86;
+      }
+    } else {
+      reelSmoothedBass *= 0.85;
+      reelImpactSpike *= 0.85;
+    }
+
+    if (reelSmoothedBass < 0.001) reelSmoothedBass = 0;
+    if (reelImpactSpike < 0.001) reelImpactSpike = 0;
+
+    // Punchy tactile scale kick from peak impact + rhythmic swell from sub-bass
+    const audioPunch = (reelSmoothedBass * 0.052) + (reelImpactSpike * 0.040);
+    const targetScale = 1.0 + audioPunch;
+    currentReelBassScale += (targetScale - currentReelBassScale) * 0.35;
+    const bassEnergy = Math.max(reelSmoothedBass, reelImpactSpike * 0.85);
+
+    if (reelTrack) {
+      const activeCard = reelTrack.querySelector('.reel-card.winner-landed') || reelTrack.children[currentReelIndex];
+      if (activeCard) {
+        activeCard.style.setProperty('--reel-card-bass-scale', currentReelBassScale.toFixed(4));
+        activeCard.style.setProperty('--reel-card-bass-energy', bassEnergy.toFixed(3));
+      }
+    }
+
+    if ($isArenaPlaying || currentReelBassScale > 1.001 || reelSmoothedBass > 0.001) {
+      reelAudioRafId = requestAnimationFrame(tickReelAudio);
+    } else {
+      reelAudioRafId = null;
+    }
+  }
+
+  $: if ($isArenaPlaying && !$isSpinning) {
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+    if (isMobile && !reelAudioRafId) {
+      reelAudioRafId = requestAnimationFrame(tickReelAudio);
+    }
+  }
+
   function handleVisibilityChange() {
     if (typeof document === 'undefined') return;
     if (document.hidden) {
@@ -816,6 +938,10 @@
       if (driftRafId) {
         cancelAnimationFrame(driftRafId);
         driftRafId = null;
+      }
+      if (reelAudioRafId) {
+        cancelAnimationFrame(reelAudioRafId);
+        reelAudioRafId = null;
       }
     } else {
       if ($isSpinning && finalizeRollFn) {
@@ -830,24 +956,63 @@
         if (isDriftingActive && !driftRafId) {
           startPostRollDrift();
         }
+        const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+        if (isMobile && $isArenaPlaying && !$isSpinning && !reelAudioRafId) {
+          reelAudioRafId = requestAnimationFrame(tickReelAudio);
+        }
       }
     }
   }
 
+  let reelResizeObserver = null;
+
+  $: if ($isCrateReady && reelTrack && reelViewport) {
+    requestAnimationFrame(() => {
+      measureDimensions();
+      if (!$isSpinning && !driftRafId) {
+        recenterReel(currentReelIndex);
+      }
+    });
+  }
+
   onMount(() => {
     buildInitialReel();
+    requestAnimationFrame(() => {
+      measureDimensions();
+      recenterReel(currentReelIndex);
+    });
+
+    if (typeof ResizeObserver !== 'undefined' && reelViewport) {
+      reelResizeObserver = new ResizeObserver(() => {
+        if (!$isSpinning && !driftRafId) {
+          measureDimensions();
+          recenterReel(currentReelIndex);
+        }
+      });
+      reelResizeObserver.observe(reelViewport);
+    }
+
     const handleResize = () => {
       if (!$isSpinning && !driftRafId) {
+        measureDimensions();
         recenterReel(currentReelIndex);
       }
     };
     window.addEventListener('resize', handleResize);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
+      if (reelResizeObserver) {
+        reelResizeObserver.disconnect();
+        reelResizeObserver = null;
+      }
       window.removeEventListener('resize', handleResize);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearActiveRollTimers();
       if (autoRollTimer) clearTimeout(autoRollTimer);
+      if (reelAudioRafId) {
+        cancelAnimationFrame(reelAudioRafId);
+        reelAudioRafId = null;
+      }
     };
   });
 </script>

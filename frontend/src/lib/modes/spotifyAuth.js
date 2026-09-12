@@ -229,6 +229,7 @@ export async function compileMultiPlaylistCrate(token, selectedPlaylists, onProg
 
       const key = `${title.toLowerCase()}||${artist.toLowerCase()}`;
       const coverUrl = (t.album && t.album.images && t.album.images.length > 0) ? t.album.images[0].url : pCover;
+      const rawPreview = t.preview_url || "";
       // Prefer empty preview_url so the multi-tier Apple/iTunes 30s resolver resolves full previews
       const previewUrl = "";
       const spotifyUrl = t.external_urls?.spotify || (t.id ? `https://open.spotify.com/track/${t.id}` : "");
@@ -247,6 +248,7 @@ export async function compileMultiPlaylistCrate(token, selectedPlaylists, onProg
           playlist_uri: p.uri || "",
           playlist_url: p.external_urls?.spotify || `https://open.spotify.com/playlist/${pId}`,
           preview_url: previewUrl,
+          raw_preview_url: rawPreview,
           uri: t.uri || "",
           spotify_url: spotifyUrl,
           duration_ms: t.duration_ms || 0,

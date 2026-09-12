@@ -60,6 +60,7 @@ function processPlaylistEntity(entity) {
     const key = `${title.toLowerCase()}||${artist.toLowerCase()}`;
 
     const audioPreview = t.audioPreview;
+    const rawPreview = (typeof audioPreview === 'object' ? audioPreview?.url : '') || t.preview_url || '';
     // Prefer empty preview_url so the multi-tier Apple/iTunes 30s resolver resolves full previews
     const previewUrl = '';
     const spotifyId = (t.uri || '').split(':').pop() || '';
@@ -79,6 +80,7 @@ function processPlaylistEntity(entity) {
         playlist_uri: entity.uri || '',
         playlist_url: `https://open.spotify.com/playlist/${entity.id || ''}`,
         preview_url: previewUrl,
+        raw_preview_url: rawPreview,
         uri: t.uri || '',
         spotify_url: spotifyUrl,
         duration_ms: t.duration || 0,
@@ -172,6 +174,7 @@ function compileMultiPlaylistEntities(userProfile, playlistEntities) {
 
       const key = `${title.toLowerCase()}||${artist.toLowerCase()}`;
       const audioPreview = t.audioPreview;
+      const rawPreview = (typeof audioPreview === 'object' ? audioPreview?.url : '') || t.preview_url || '';
       // Prefer empty preview_url so the multi-tier Apple/iTunes 30s resolver resolves full previews
       const previewUrl = '';
       const spotifyId = (t.uri || '').split(':').pop() || '';
@@ -191,6 +194,7 @@ function compileMultiPlaylistEntities(userProfile, playlistEntities) {
           playlist_uri: entity.uri || `spotify:playlist:${pId}`,
           playlist_url: `https://open.spotify.com/playlist/${pId}`,
           preview_url: previewUrl,
+          raw_preview_url: rawPreview,
           uri: t.uri || '',
           spotify_url: spotifyUrl,
           duration_ms: t.duration || 0,

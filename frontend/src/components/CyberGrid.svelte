@@ -52,6 +52,14 @@
 
   function resize() {
     if (!canvas) return;
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+      width = 0;
+      height = 0;
+      canvas.width = 0;
+      canvas.height = 0;
+      return;
+    }
     const parent = canvas.parentElement;
     if (parent) {
       const rect = parent.getBoundingClientRect();
@@ -85,7 +93,7 @@
         return;
       }
 
-      if (!ctx || width === 0 || height === 0) {
+      if (!ctx || width === 0 || height === 0 || width <= 768) {
         animId = requestAnimationFrame(render);
         return;
       }
@@ -247,6 +255,12 @@
     pointer-events: none;
     z-index: 1;
     overflow: hidden;
+  }
+
+  @media (max-width: 768px) {
+    .cyber-grid-wrapper {
+      display: none !important;
+    }
   }
 
   .cyber-grid-canvas {

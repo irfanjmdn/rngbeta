@@ -104,7 +104,7 @@
             {row.name}
           </span>
           <span class="rates-desc">
-            {row.desc} &bull; <strong style="color: var(--text-main);">{row.count} tracks</strong>
+            {row.desc} &bull; <strong style="color: var(--text-main);">{row.count} {row.count === 1 ? 'track' : 'tracks'}</strong>
           </span>
           <strong class="rates-odds" style="color: {row.color};">{row.oddsText}</strong>
         </div>
@@ -112,7 +112,7 @@
     </div>
 
     <div class="rates-note" id="ratesNote">
-      Rates calibrated dynamically from {$activeUserId ? $activeUserId : 'user'}'s crate ({$rngTracks.length} tracks across all playlists).
+      Calibrated to {$activeUserId ? `@${$activeUserId}` : 'pilot'} crate ({$rngTracks.length} tracks).
     </div>
   </div>
 </dialog>

@@ -205,7 +205,8 @@ def compute_dynamic_rarity_tracks(playlists_data):
                     "title": title,
                     "artist": artist,
                     "uri": t.get("uri", ""),
-                    "preview_url": preview_url,
+                    "preview_url": "",
+                    "raw_preview_url": preview_url,
                     "cover_url": p_cover,
                     "duration_ms": t.get("duration", 0),
                     "playlists": []
@@ -362,7 +363,8 @@ def compute_dynamic_rarity_tracks(playlists_data):
             "playlist_id": p_list[0].get("id", ""),
             "playlist_uri": p_list[0].get("uri", ""),
             "playlist_url": p_list[0].get("url", ""),
-            "preview_url": t["preview_url"],
+            "preview_url": "",
+            "raw_preview_url": t.get("raw_preview_url", "") or t.get("preview_url", ""),
             "uri": t["uri"] or (f"spotify:track:{spotify_id}" if spotify_id else ""),
             "spotify_url": spotify_url,
             "rarityTier": rarity_tier,
@@ -1083,6 +1085,9 @@ def handle_spotify_fetch(profile_input, send_event, log_msg, force_refresh=False
             "common": common_cnt
         }
     })
+
+
+http.server.SimpleHTTPRequestHandler.extensions_map['.webmanifest'] = 'application/manifest+json'
 
 
 class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):

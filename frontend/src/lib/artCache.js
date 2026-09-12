@@ -130,6 +130,7 @@ export async function fetchTrackPreview(card) {
       if (cachedPreview) {
         clientPreviewCache[key] = cachedPreview;
         card.preview_url = cachedPreview;
+        return cachedPreview;
       }
       if (cachedArt && isPlaceholderCover(card)) {
         clientArtCache[key] = cachedArt;
@@ -139,11 +140,12 @@ export async function fetchTrackPreview(card) {
         clientReleaseDateCache[key] = cachedDate;
         card.release_date = cachedDate;
       }
-      if (card.preview_url) {
-        return card.preview_url;
-      }
     } catch {}
   }
+
+  // Preserve native preview URL as fallback only if external resolvers find nothing
+  card.raw_preview_url = card.raw_preview_url || card.preview_url || '';
+  card.preview_url = '';
 
   // Deduplicate inflight requests
   if (pendingPreviewRequests.has(key)) {
@@ -218,6 +220,11 @@ export async function fetchTrackPreview(card) {
           if (dzResult.albumCoverUrl) resolvedArt = dzResult.albumCoverUrl;
         }
       } catch {}
+    }
+
+    // Fallback: use raw/native preview URL only if iTunes/Apple Music/Deezer resolvers find nothing
+    if (!resolvedPreview && card.raw_preview_url) {
+      resolvedPreview = card.raw_preview_url;
     }
 
     // Apply resolved data to card and caches

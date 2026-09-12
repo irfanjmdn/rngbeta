@@ -10,6 +10,7 @@
     arenaAudioTime,
     isArenaPlaying,
   } from '../lib/store.js';
+  import { triggerHaptic } from '../lib/haptics.js';
 
   export let onRoll = () => {};
 
@@ -19,6 +20,11 @@
 
   let isPostRollNudge = false;
   let postRollNudgeTimer = null;
+
+  let rollWrapWidth = 0;
+  let rollWrapHeight = 0;
+  $: beamWidth = (rollWrapWidth || 120) + 3;
+  $: beamHeight = (rollWrapHeight || 52) + 3;
 
   // Beam display calculation:
   // - In 'on_track_end' mode, only show circling beam in the final 4 seconds before next auto-roll
@@ -44,7 +50,10 @@
   }
 
   function toggleMenu(e) {
-    e.stopPropagation();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     isMenuOpen = !isMenuOpen;
   }
 
@@ -63,6 +72,7 @@
 
   if (typeof window !== 'undefined') {
     window.addEventListener('click', handleDocumentClick);
+    window.addEventListener('touchend', handleDocumentClick, { passive: true });
     window.addEventListener('keydown', handleKeydown);
   }
 
@@ -78,6 +88,7 @@
     if (e?.currentTarget?.blur) e.currentTarget.blur();
     clearPostRollNudge();
     if (!$isSpinning) {
+      triggerHaptic('medium');
       isLaunching = true;
       if (launchTimer) clearTimeout(launchTimer);
       launchTimer = setTimeout(() => {
@@ -91,6 +102,7 @@
 
   function handleAutoRollToggle(e) {
     if (e?.currentTarget?.blur) e.currentTarget.blur();
+    triggerHaptic('light');
     isAutoRolling.update((val) => {
       const next = !val;
       if (next && !$isSpinning) {
@@ -136,6 +148,7 @@
 
   function handleAutoSkipToggle(e) {
     if (e?.currentTarget?.blur) e.currentTarget.blur();
+    triggerHaptic('light');
     isAutoSkip.update((val) => !val);
   }
 
@@ -206,8 +219,12 @@
           <path d="M7 22l-4-4 4-4" />
           <path d="M21 13v1a4 4 0 0 1-4 4H3" />
         </svg>
-        <span class="deck-btn-label">
-          {$autoRollMode === 'on_track_end' ? 'Auto-roll (Track)' : 'Auto-roll (Fast)'}
+        <span class="deck-btn-label deck-label-stacked">
+          <span class="label-full">{$autoRollMode === 'on_track_end' ? 'Auto-roll (Track)' : 'Auto-roll (Fast)'}</span>
+          <span class="label-short">
+            <span class="label-main">AUTO</span>
+            <span class="label-sub">{$autoRollMode === 'on_track_end' ? '(TRACK)' : '(FAST)'}</span>
+          </span>
         </span>
         <span class="auto-roll-status-dot"></span>
         <span id="lblAutoRoll" style="display:none;">
@@ -247,7 +264,7 @@
             type="button"
             role="menuitem"
             class="flyout-menu-item {$autoRollMode === 'on_track_end' ? 'selected' : ''}"
-            on:click={() => setAutoRollMode('on_track_end')}
+            on:click|stopPropagation={() => setAutoRollMode('on_track_end')}
           >
             <div class="flyout-item-text">
               <span class="flyout-item-title">Track (Default)</span>
@@ -263,7 +280,7 @@
             type="button"
             role="menuitem"
             class="flyout-menu-item {$autoRollMode === 'immediate' ? 'selected' : ''}"
-            on:click={() => setAutoRollMode('immediate')}
+            on:click|stopPropagation={() => setAutoRollMode('immediate')}
           >
             <div class="flyout-item-text">
               <span class="flyout-item-title">Fast</span>
@@ -281,9 +298,13 @@
   </div>
 
   <div class="deck-col-center">
-    <div class="roll-btn-halo-wrap {showCirclingBeam ? 'has-circling-beam' : ''}">
+    <div
+      class="roll-btn-halo-wrap {showCirclingBeam ? 'has-circling-beam' : ''}"
+      bind:clientWidth={rollWrapWidth}
+      bind:clientHeight={rollWrapHeight}
+    >
       {#if showCirclingBeam}
-        <svg class="roll-btn-svg-beam" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <svg class="roll-btn-svg-beam" viewBox="0 0 {beamWidth} {beamHeight}" aria-hidden="true">
           <defs>
             <linearGradient id="beamGrad" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stop-color="#34D399" stop-opacity="0" />
@@ -291,10 +312,27 @@
               <stop offset="100%" stop-color="#FFFFFF" stop-opacity="1" />
             </linearGradient>
           </defs>
-          <!-- Track base outline -->
-          <rect class="beam-track" x="0.5" y="0.5" width="99" height="99" rx="4.8" ry="21.7" />
-          <!-- Animated traveling beam head -->
-          <rect class="beam-head" x="0.5" y="0.5" width="99" height="99" rx="4.8" ry="21.7" pathLength="100" />
+          <!-- Track base outline matching 10px button border radius -->
+          <rect
+            class="beam-track"
+            x="0.75"
+            y="0.75"
+            width={Math.max(10, beamWidth - 1.5)}
+            height={Math.max(10, beamHeight - 1.5)}
+            rx="10"
+            ry="10"
+          />
+          <!-- Animated traveling beam head matching 10px button border radius -->
+          <rect
+            class="beam-head"
+            x="0.75"
+            y="0.75"
+            width={Math.max(10, beamWidth - 1.5)}
+            height={Math.max(10, beamHeight - 1.5)}
+            rx="10"
+            ry="10"
+            pathLength="100"
+          />
         </svg>
       {/if}
       <button
@@ -338,7 +376,10 @@
         <polygon points="13 19 22 12 13 5 13 19" />
         <polygon points="2 19 11 12 2 5 2 19" />
       </svg>
-      <span class="deck-btn-label">Fast-forward</span>
+      <span class="deck-btn-label">
+        <span class="label-full">Fast-forward</span>
+        <span class="label-short">Fast</span>
+      </span>
       <span class="auto-skip-status-dot"></span>
       <span id="lblAutoSkip" style="display:none;">
         {$isAutoSkip ? 'Auto Skip: ON' : 'Auto Skip: OFF'}

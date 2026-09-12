@@ -119,11 +119,20 @@ let prevRaw = 0;
  * - Dynamic range scaling: maps [floor, ceiling] smoothly into [0.0, 1.0] across both quiet/filtered and loud/full-spectrum audio.
  * - Headroom-relative onset detection: cutoff stays bounded within [floor, ceiling], preventing cutoff overflow above 1.0.
  */
+let cachedBassMetrics = null;
+let lastBassMetricsTime = 0;
+
 export function getTargetBassPeakMetrics(minHz = 20, maxHz = 150) {
   const node = getAnalyserNode();
   if (!node || !audioDataArray) {
     return { energy: 0, peak: 0, raw: 0 };
   }
+  const now = performance.now();
+  // Return cached result if called multiple times within the same RAF frame (< 10ms)
+  if (cachedBassMetrics && (now - lastBassMetricsTime < 10) && minHz === 20 && maxHz === 150) {
+    return cachedBassMetrics;
+  }
+
   try {
     const ctx = getAudioContext();
     const sampleRate = ctx ? ctx.sampleRate : 44100;
@@ -143,7 +152,6 @@ export function getTargetBassPeakMetrics(minHz = 20, maxHz = 150) {
 
     // RMS magnitude over target bass band
     const raw = Math.sqrt(sumSq / count);
-    const now = performance.now();
 
     // 1. Asymmetric Floor Tracking:
     // Tracks baseline between beats. Slow rise (0.006) ensures bass beats do not elevate the floor.
@@ -179,11 +187,16 @@ export function getTargetBassPeakMetrics(minHz = 20, maxHz = 150) {
       lastPeakTime = now;
     }
 
-    return {
+    const result = {
       energy: normalizedEnergy,
       peak: currentPeakIntensity,
       raw
     };
+    if (minHz === 20 && maxHz === 150) {
+      cachedBassMetrics = result;
+      lastBassMetricsTime = now;
+    }
+    return result;
   } catch (e) {
     return { energy: 0, peak: 0, raw: 0 };
   }
@@ -506,7 +519,8 @@ export function setArenaReverbWet(wetLevel, timeConstant = 0.25) {
 export function setArenaLowpassFilter(enabled, lowCutoff = 500, _highCutoff = 100, timeConstant = 0.25) {
   const ctx = getAudioContext();
   if (!ctx) return;
-  const targetLowFreq = enabled ? lowCutoff : 20000;
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+  const targetLowFreq = (enabled && !isMobile) ? lowCutoff : 20000;
   currentLowpassCutoff = targetLowFreq;
 
   const lowpass = getArenaLowpassNode();
@@ -580,6 +594,22 @@ if (typeof window !== 'undefined') {
   window.addEventListener('keydown', () => preloadRollSounds(), { once: true });
 }
 
+function autoCleanupNode(sourceNode, ...connectedNodes) {
+  if (!sourceNode) return;
+  sourceNode.onended = () => {
+    try {
+      sourceNode.disconnect();
+    } catch (e) {}
+    connectedNodes.forEach((node) => {
+      try {
+        if (node && typeof node.disconnect === 'function') {
+          node.disconnect();
+        }
+      } catch (e) {}
+    });
+  };
+}
+
 export function playSampledSound(bufferName, { volume = 1.0, playbackRate = 1.0 } = {}) {
   if (sfxVolume <= 0) return false;
   try {
@@ -597,6 +627,7 @@ export function playSampledSound(bufferName, { volume = 1.0, playbackRate = 1.0 
 
     source.connect(gain);
     gain.connect(getAudioDestinationNode() || ctx.destination);
+    autoCleanupNode(source, gain);
     source.start(ctx.currentTime);
     return true;
   } catch (e) {
@@ -629,6 +660,7 @@ export function playTickSound(progressOrFreq = 0) {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
       osc.connect(gain);
       gain.connect(getAudioDestinationNode() || ctx.destination);
+      autoCleanupNode(osc, gain);
       osc.start(now);
       osc.stop(now + 0.025);
     } catch (e) {}
@@ -652,6 +684,7 @@ export function playPointerSeekSound() {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
       osc.connect(gain);
       gain.connect(getAudioDestinationNode() || ctx.destination);
+      autoCleanupNode(osc, gain);
       osc.start(now);
       osc.stop(now + 0.095);
     } catch (e) {}
@@ -697,6 +730,7 @@ export function playJogDialSound(isForward = true) {
     filter.connect(gain);
     gain.connect(getAudioDestinationNode() || ctx.destination);
 
+    autoCleanupNode(osc, filter, gain);
     osc.start(now);
     osc.stop(now + 0.014);
   } catch (e) {}
@@ -721,6 +755,7 @@ export function playMechanicalBrakeSound() {
       gainClick.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
       oscClick.connect(gainClick);
       gainClick.connect(dest);
+      autoCleanupNode(oscClick, gainClick);
       oscClick.start(now);
       oscClick.stop(now + 0.025);
 
@@ -733,6 +768,7 @@ export function playMechanicalBrakeSound() {
       gainHigh.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
       oscHigh.connect(gainHigh);
       gainHigh.connect(dest);
+      autoCleanupNode(oscHigh, gainHigh);
       oscHigh.start(now);
       oscHigh.stop(now + 0.045);
 
@@ -745,6 +781,7 @@ export function playMechanicalBrakeSound() {
       gainLow.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
       oscLow.connect(gainLow);
       gainLow.connect(dest);
+      autoCleanupNode(oscLow, gainLow);
       oscLow.start(now);
       oscLow.stop(now + 0.08);
     } catch (e) {}
@@ -767,6 +804,7 @@ export function playLandingImpactBass() {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
     osc.connect(gain);
     gain.connect(getAudioDestinationNode() || ctx.destination);
+    autoCleanupNode(osc, gain);
     osc.start(now);
     osc.stop(now + 0.24);
   } catch (e) {}
@@ -797,6 +835,7 @@ export function playStarSound() {
     gainPing.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.045);
     oscPing.connect(gainPing);
     gainPing.connect(filter);
+    autoCleanupNode(oscPing, gainPing);
     oscPing.start(t0);
     oscPing.stop(t0 + 0.05);
 
@@ -809,6 +848,7 @@ export function playStarSound() {
     gainRoot.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.38);
     oscRoot.connect(gainRoot);
     gainRoot.connect(filter);
+    autoCleanupNode(oscRoot, gainRoot);
     oscRoot.start(t0);
     oscRoot.stop(t0 + 0.39);
 
@@ -822,6 +862,7 @@ export function playStarSound() {
     gainHarmonic.gain.exponentialRampToValueAtTime(0.0001, tHarmonic + 0.32);
     oscHarmonic.connect(gainHarmonic);
     gainHarmonic.connect(filter);
+    autoCleanupNode(oscHarmonic, gainHarmonic);
     oscHarmonic.start(tHarmonic);
     oscHarmonic.stop(tHarmonic + 0.33);
 
@@ -834,6 +875,7 @@ export function playStarSound() {
     gainWarmth.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.36);
     oscWarmth.connect(gainWarmth);
     gainWarmth.connect(filter);
+    autoCleanupNode(oscWarmth, gainWarmth, filter, masterGain);
     oscWarmth.start(t0);
     oscWarmth.stop(t0 + 0.37);
   } catch (e) {}
@@ -854,6 +896,7 @@ export function playUnstarSound() {
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.045);
     osc.connect(gain);
     gain.connect(getAudioDestinationNode() || ctx.destination);
+    autoCleanupNode(osc, gain);
     osc.start(t0);
     osc.stop(t0 + 0.05);
   } catch (e) {}
@@ -878,6 +921,7 @@ export function playFanfareSound(tier) {
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.8);
         osc.connect(gain);
         gain.connect(dest);
+        autoCleanupNode(osc, gain);
         osc.start(now + idx * 0.06);
         osc.stop(now + idx * 0.06 + 0.82);
       });
@@ -893,6 +937,7 @@ export function playFanfareSound(tier) {
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.5);
         osc.connect(gain);
         gain.connect(dest);
+        autoCleanupNode(osc, gain);
         osc.start(now + idx * 0.05);
         osc.stop(now + idx * 0.05 + 0.52);
       });
@@ -906,6 +951,7 @@ export function playFanfareSound(tier) {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
       osc.connect(gain);
       gain.connect(dest);
+      autoCleanupNode(osc, gain);
       osc.start(now);
       osc.stop(now + 0.26);
     }
@@ -940,7 +986,8 @@ export function startLogoutRumble() {
     // Immediately lowpass duck currently playing music and engage hall reverb
     const lowpass = getArenaLowpassNode();
     const prevCutoff = currentLowpassCutoff;
-    if (lowpass) {
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+    if (lowpass && !isMobile) {
       try {
         lowpass.frequency.cancelScheduledValues(now);
         lowpass.frequency.setTargetAtTime(380, now, 0.02);
@@ -1072,6 +1119,7 @@ export function playLogoutConfirmSound() {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
     osc.connect(gain);
     gain.connect(getAudioDestinationNode() || ctx.destination);
+    autoCleanupNode(osc, gain);
     osc.start(now);
     osc.stop(now + 0.25);
   } catch (e) {}
@@ -1097,6 +1145,7 @@ export function playLogoutSquareSound(stepIndex = 1) {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
       osc.connect(gain);
       gain.connect(getAudioDestinationNode() || ctx.destination);
+      autoCleanupNode(osc, gain);
       osc.start(now);
       osc.stop(now + 0.05);
     } catch (e) {}
@@ -1123,6 +1172,7 @@ export function playLogoutCancelPipSound(stepIndex = 1) {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
       osc.connect(gain);
       gain.connect(getAudioDestinationNode() || ctx.destination);
+      autoCleanupNode(osc, gain);
       osc.start(now);
       osc.stop(now + 0.045);
     } catch (e) {}
@@ -1159,6 +1209,8 @@ export function playRollNudgeSound() {
       osc2.connect(gain);
       gain.connect(dest);
 
+      autoCleanupNode(osc1, gain);
+      autoCleanupNode(osc2);
       osc1.start(now);
       osc2.start(now);
       osc1.stop(now + 0.17);
