@@ -53,6 +53,12 @@
   const preloadedAudioMap = new Map();
   let upcomingRollQueue = [];
 
+  let spinStartTime = 0;
+  let spinExpectedDuration = 3950;
+  let finalizeRollFn = null;
+  let resumeSpinFn = null;
+  let isDriftingActive = false;
+
   function preloadCardAudio(card) {
     if (!card) return;
     if (card.source === 'soundcloud' && card.preview_url) {
@@ -207,18 +213,48 @@
     return div;
   }
 
-  function updateReelScales() {
+  const CARD_WIDTH = 136;
+  const CARD_MARGIN = 6;
+  let cardTotalWidth = CARD_WIDTH + CARD_MARGIN * 2; // 148px
+  let cachedViewportWidth = 0;
+
+  function measureDimensions() {
+    if (!reelViewport) return;
+    cachedViewportWidth = reelViewport.clientWidth || 1024;
+    const firstCard = reelTrack?.firstElementChild;
+    if (firstCard) {
+      const w = firstCard.offsetWidth;
+      if (w > 0) {
+        cardTotalWidth = w + CARD_MARGIN * 2;
+      }
+    }
+  }
+
+  function updateReelScales(activeX = currentTranslateX, updateAll = false) {
     if (!reelTrack || !reelViewport) return;
     const cards = reelTrack.children;
-    if (!cards.length) return;
-    const viewportRect = reelViewport.getBoundingClientRect();
-    const centerX = viewportRect.left + viewportRect.width / 2;
-    const maxDist = viewportRect.width / 2 + 80;
+    const totalCards = cards.length;
+    if (!totalCards) return;
 
-    for (let i = 0; i < cards.length; i++) {
+    const vpWidth = cachedViewportWidth || reelViewport.clientWidth || 1024;
+    const centerX = vpWidth / 2;
+    const maxDist = centerX + 80;
+
+    let minIndex = 0;
+    let maxIndex = totalCards - 1;
+
+    if (!updateAll) {
+      const centerCardFloat = (centerX - (activeX + cardTotalWidth / 2)) / cardTotalWidth;
+      const centerCardIndex = Math.round(centerCardFloat);
+      minIndex = Math.max(0, centerCardIndex - 7);
+      maxIndex = Math.min(totalCards - 1, centerCardIndex + 7);
+    }
+
+    for (let i = minIndex; i <= maxIndex; i++) {
       const card = cards[i];
-      const cardRect = card.getBoundingClientRect();
-      const cardCenterX = cardRect.left + cardRect.width / 2;
+      if (!card) continue;
+
+      const cardCenterX = activeX + i * cardTotalWidth + cardTotalWidth / 2;
       const dist = Math.abs(centerX - cardCenterX);
       const normDist = Math.min(dist / maxDist, 1);
 
@@ -243,22 +279,13 @@
 
   function recenterReel(index) {
     if (!reelTrack || !reelViewport) return;
-    const firstCard = reelTrack.firstElementChild;
-    if (!firstCard) return;
-    const cardRect = firstCard.getBoundingClientRect();
-    const cardStyle = window.getComputedStyle(firstCard);
-    const mLeft = parseFloat(cardStyle.marginLeft) || 6;
-    const mRight = parseFloat(cardStyle.marginRight) || 6;
-    const cardWidth =
-      firstCard.offsetWidth > 0 ? firstCard.offsetWidth : cardRect.width > 0 ? cardRect.width : 136;
-    const cardTotalWidth = cardWidth + mLeft + mRight;
-    const viewportWidth = reelViewport.clientWidth;
-    const centerTarget = viewportWidth / 2 - cardTotalWidth / 2;
+    measureDimensions();
+    const centerTarget = cachedViewportWidth / 2 - cardTotalWidth / 2;
     const targetX = -(index * cardTotalWidth) + centerTarget;
     reelTrack.style.transition = 'none';
     reelTrack.style.transform = `translateX(${targetX}px)`;
     currentTranslateX = targetX;
-    updateReelScales();
+    updateReelScales(targetX, true);
   }
 
   export function buildInitialReel() {
@@ -285,6 +312,9 @@
   }
 
   function clearActiveRollTimers() {
+    isDriftingActive = false;
+    finalizeRollFn = null;
+    resumeSpinFn = null;
     if (postRollDriftTimer) {
       clearTimeout(postRollDriftTimer);
       postRollDriftTimer = null;
@@ -325,23 +355,13 @@
   }
 
   function getCenterCardData() {
-    if (!reelTrack || !reelViewport || !reelTrack.children.length) return null;
-    const vpRect = reelViewport.getBoundingClientRect();
-    const centerX = vpRect.left + vpRect.width / 2;
-    let closestCard = null;
-    let minDistance = Infinity;
-
-    for (let i = 0; i < reelTrack.children.length; i++) {
-      const card = reelTrack.children[i];
-      const cardRect = card.getBoundingClientRect();
-      const cardCenterX = cardRect.left + cardRect.width / 2;
-      const dist = Math.abs(cardCenterX - centerX);
-      if (dist < minDistance) {
-        minDistance = dist;
-        closestCard = card;
-      }
-    }
-    return closestCard ? closestCard._cardData : null;
+    if (!reelTrack || !reelTrack.children.length) return null;
+    const vpWidth = cachedViewportWidth || (reelViewport ? reelViewport.clientWidth : 1024);
+    const centerX = vpWidth / 2;
+    const centerIndex = Math.round((centerX - currentTranslateX - cardTotalWidth / 2) / cardTotalWidth);
+    const clampedIndex = Math.max(0, Math.min(reelTrack.children.length - 1, centerIndex));
+    const card = reelTrack.children[clampedIndex];
+    return card ? card._cardData : null;
   }
 
   function startPostRollDrift() {
@@ -352,6 +372,7 @@
       driftRafId = null;
     }
 
+    isDriftingActive = true;
     reelTrack.style.transition = 'none';
     const driftSpeed = 30; // slightly slower pixels per second
     const rampDuration = 1000; // ms to smoothly ease into continuous drift
@@ -370,6 +391,11 @@
     function driftStep(now) {
       if ($isSpinning || !reelTrack || !reelViewport) {
         driftRafId = null;
+        isDriftingActive = false;
+        return;
+      }
+      if (typeof document !== 'undefined' && document.hidden) {
+        driftRafId = null;
         return;
       }
 
@@ -385,11 +411,11 @@
       reelTrack.style.transform = `translateX(${currentTranslateX.toFixed(2)}px)`;
 
       // Ensure upcoming cards on the right never run out
-      const lastCard = reelTrack.lastElementChild;
-      if (lastCard) {
-        const lastRect = lastCard.getBoundingClientRect();
-        const vpRect = reelViewport.getBoundingClientRect();
-        if (lastRect.right < vpRect.right + 800) {
+      const totalCards = reelTrack.children.length;
+      if (totalCards > 0) {
+        const lastCardRight = currentTranslateX + totalCards * cardTotalWidth;
+        const vpWidth = cachedViewportWidth || reelViewport.clientWidth || 1024;
+        if (lastCardRight < vpWidth + 800) {
           const newCard = pickWeightedCard();
           if (newCard) {
             reelTrack.appendChild(createReelCardElement(newCard));
@@ -397,7 +423,7 @@
         }
       }
 
-      updateReelScales();
+      updateReelScales(currentTranslateX);
       driftRafId = requestAnimationFrame(driftStep);
     }
 
@@ -489,20 +515,8 @@
       reelTrack.appendChild(createReelCardElement(card));
     }
 
-    const firstCard = reelTrack.firstElementChild;
-    const cardRect = firstCard ? firstCard.getBoundingClientRect() : null;
-    const cardStyle = firstCard ? window.getComputedStyle(firstCard) : null;
-    const mLeft = cardStyle ? parseFloat(cardStyle.marginLeft) || 0 : 6;
-    const mRight = cardStyle ? parseFloat(cardStyle.marginRight) || 0 : 6;
-    const cardWidth =
-      firstCard && firstCard.offsetWidth > 0
-        ? firstCard.offsetWidth
-        : cardRect && cardRect.width > 0
-          ? cardRect.width
-          : 136;
-    const cardTotalWidth = cardWidth + mLeft + mRight;
-    const viewportWidth = reelViewport.clientWidth;
-    const centerTarget = viewportWidth / 2 - cardTotalWidth / 2;
+    measureDimensions();
+    const centerTarget = cachedViewportWidth / 2 - cardTotalWidth / 2;
 
     const startTranslateX = -(START_INDEX * cardTotalWidth) + centerTarget;
     const finalTranslateX = -(WINNER_INDEX * cardTotalWidth) + centerTarget;
@@ -532,10 +546,30 @@
     currentTranslateX = startTranslateX;
     void reelTrack.offsetWidth;
     reelCurrentX.set(startTranslateX);
-    updateReelScales();
+    updateReelScales(startTranslateX, true);
 
     const spinDuration = 3950;
     const easingCurve = 'cubic-bezier(0.05, 0.68, 0.16, 1)';
+
+    spinStartTime = performance.now();
+    const needsNudge = Math.abs(naturalOffset) > 4;
+    const alignDuration = needsNudge
+      ? Math.round(Math.max(160, Math.min(300, 140 + Math.abs(naturalOffset) * 2.5)))
+      : 0;
+    spinExpectedDuration = $isAutoSkip ? 850 : (spinDuration + alignDuration);
+
+    finalizeRollFn = finalizeRoll;
+    resumeSpinFn = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      prevTickTime = performance.now();
+      try {
+        const matrix = new DOMMatrixReadOnly(window.getComputedStyle(reelTrack).transform);
+        prevTranslateX = matrix.m41;
+      } catch (e) {}
+      if (!rollRafId && $isSpinning) {
+        rollRafId = requestAnimationFrame(trackReelTick);
+      }
+    };
 
     reelTrack.style.transition = `transform ${spinDuration}ms ${easingCurve}`;
     reelTrack.style.transform = `translateX(${landingTranslateX}px)`;
@@ -549,6 +583,10 @@
 
     function trackReelTick() {
       if (!$isSpinning) return;
+      if (typeof document !== 'undefined' && document.hidden) {
+        rollRafId = null;
+        return;
+      }
       try {
         const now = performance.now();
         const matrix = new DOMMatrixReadOnly(window.getComputedStyle(reelTrack).transform);
@@ -584,7 +622,7 @@
           lastCrossedCard = currentCard;
         }
 
-        updateReelScales();
+        updateReelScales(currentX);
       } catch (e) {}
 
       if ($isSpinning) {
@@ -628,7 +666,8 @@
       saveUserData(currentUserId, currentInv, currentRolls, currentTimes, currentStarred);
 
       // Arena shockwave
-      if (spinnerMachineWrap) {
+      const isDocHidden = typeof document !== 'undefined' && document.hidden;
+      if (!isDocHidden && spinnerMachineWrap) {
         spinnerMachineWrap.classList.remove('impact-shock');
         void spinnerMachineWrap.offsetWidth;
         spinnerMachineWrap.classList.add('impact-shock');
@@ -639,10 +678,10 @@
       const allCards = reelTrack.children;
       if (allCards[WINNER_INDEX]) {
         allCards[WINNER_INDEX].classList.remove('winner-landed');
-        void allCards[WINNER_INDEX].offsetWidth;
+        if (!isDocHidden) void allCards[WINNER_INDEX].offsetWidth;
         allCards[WINNER_INDEX].classList.add('winner-landed');
       }
-      updateReelScales();
+      updateReelScales(finalTranslateX, true);
 
       // Audio effects
       playTierLandingSound(winner.rarityTier);
@@ -668,6 +707,13 @@
       if (btnSkip) btnSkip.classList.add('is-skipping-active');
 
       rollAutoSkipTimer = setTimeout(() => {
+        rollAutoSkipTimer = null;
+        if (typeof document !== 'undefined' && document.hidden) {
+          if (btnSkip) btnSkip.classList.remove('is-skipping-active');
+          finalizeRoll();
+          return;
+        }
+
         const startGlideX = finalTranslateX + 35;
         reelTrack.style.transition = 'none';
         reelTrack.style.transform = `translateX(${startGlideX}px)`;
@@ -712,6 +758,10 @@
     } else {
       rollNormalEndTimer = setTimeout(() => {
         rollNormalEndTimer = null;
+        if (typeof document !== 'undefined' && document.hidden) {
+          finalizeRoll();
+          return;
+        }
 
         const needsNudge = Math.abs(naturalOffset) > 4;
         const alignDuration = needsNudge
@@ -756,6 +806,34 @@
     }
   }
 
+  function handleVisibilityChange() {
+    if (typeof document === 'undefined') return;
+    if (document.hidden) {
+      if (rollRafId) {
+        cancelAnimationFrame(rollRafId);
+        rollRafId = null;
+      }
+      if (driftRafId) {
+        cancelAnimationFrame(driftRafId);
+        driftRafId = null;
+      }
+    } else {
+      if ($isSpinning && finalizeRollFn) {
+        const elapsed = performance.now() - spinStartTime;
+        if (elapsed >= spinExpectedDuration) {
+          finalizeRollFn();
+        } else if (resumeSpinFn) {
+          resumeSpinFn();
+        }
+      } else {
+        updateReelScales(currentTranslateX, true);
+        if (isDriftingActive && !driftRafId) {
+          startPostRollDrift();
+        }
+      }
+    }
+  }
+
   onMount(() => {
     buildInitialReel();
     const handleResize = () => {
@@ -764,8 +842,10 @@
       }
     };
     window.addEventListener('resize', handleResize);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearActiveRollTimers();
       if (autoRollTimer) clearTimeout(autoRollTimer);
     };

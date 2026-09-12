@@ -20,6 +20,8 @@
     isRollShimmerActive,
     markTrackUnplayable,
     unplayableTrackIds,
+    toggleStar,
+    isAutoSkip,
   } from './lib/store.js';
 
   import Onboarding from './components/Onboarding.svelte';
@@ -38,6 +40,7 @@
     getAudioContext,
     playLogoutSquareSound,
     declickAudioSeek,
+    playUiTapSound,
   } from './lib/audio.js';
   import { fetchTrackPreview } from './lib/artCache.js';
   import { getSoundCloudProxyUrl, resolveSoundCloudStreamUrl } from './lib/modes/soundcloudEngine.js';
@@ -473,6 +476,49 @@
     }
   }
 
+  let autoRollFastLaunchTimer = null;
+
+  function cycleAutoRoll() {
+    if (!$isCrateReady || showScreenWarning) return;
+
+    if (autoRollFastLaunchTimer) {
+      clearTimeout(autoRollFastLaunchTimer);
+      autoRollFastLaunchTimer = null;
+    }
+
+    if (!$isAutoRolling) {
+      // 1. Off -> Auto-roll (Track)
+      autoRollMode.set('on_track_end');
+      try { localStorage.setItem('crate_autoroll_mode', 'on_track_end'); } catch (e) {}
+      isAutoRolling.set(true);
+      if (!$isSpinning && !$isArenaPlaying) {
+        autoRollFastLaunchTimer = setTimeout(() => {
+          autoRollFastLaunchTimer = null;
+          if ($isAutoRolling && $autoRollMode === 'on_track_end' && !$isSpinning && !$isArenaPlaying) {
+            triggerRoll();
+          }
+        }, 1500);
+      }
+    } else if ($autoRollMode === 'on_track_end') {
+      // 2. Auto-roll (Track) -> Auto-roll (Fast)
+      autoRollMode.set('immediate');
+      try { localStorage.setItem('crate_autoroll_mode', 'immediate'); } catch (e) {}
+      isAutoRolling.set(true);
+      if (!$isSpinning) {
+        // 1.5s delay after turned on (like not rolled yet), then continued like normal
+        autoRollFastLaunchTimer = setTimeout(() => {
+          autoRollFastLaunchTimer = null;
+          if ($isAutoRolling && $autoRollMode === 'immediate' && !$isSpinning) {
+            triggerRoll();
+          }
+        }, 1500);
+      }
+    } else {
+      // 3. Auto-roll (Fast) -> Off
+      isAutoRolling.set(false);
+    }
+  }
+
   const TIER_AURA_COLORS = {
     default: {
       glow: 'rgba(29, 185, 84, 0.16)',
@@ -697,8 +743,83 @@
     }, 5000);
   }
 
+  // Dynamic marquee scrolling in browser tab title for currently playing audio
+  let titleScrollTimer = null;
+  let titleCharIndex = 0;
+  let currentTitleTrackKey = null;
+
+  $: currentPlayingTrack = $isBinderPlaying
+    ? $activeBinderTrack
+    : ($isArenaPlaying ? ($activeArenaTrack || $activeWinnerCard) : null);
+
+  function updateDocumentTitle(track) {
+    if (typeof document === 'undefined') return;
+
+    if (!track) {
+      if (titleScrollTimer) {
+        clearTimeout(titleScrollTimer);
+        titleScrollTimer = null;
+      }
+      currentTitleTrackKey = null;
+      titleCharIndex = 0;
+      document.title = 'Track RNG';
+      return;
+    }
+
+    const title = (track.title || 'Unknown Track').trim().replace(/\s+/g, ' ');
+    const artist = (track.artist || 'Unknown Artist').trim().replace(/\s+/g, ' ');
+    const trackKey = `${track.id || ''}:${title}:${artist}`;
+
+    if (trackKey !== currentTitleTrackKey) {
+      if (titleScrollTimer) {
+        clearTimeout(titleScrollTimer);
+        titleScrollTimer = null;
+      }
+      currentTitleTrackKey = trackKey;
+      titleCharIndex = 0;
+    }
+
+    const baseText = `${title} - ${artist}`;
+    const marquee = `${baseText}    •    `;
+
+    function scrollStep() {
+      if (typeof document === 'undefined') return;
+      if (!currentPlayingTrack) {
+        document.title = 'Track RNG';
+        return;
+      }
+
+      const text = marquee.slice(titleCharIndex) + marquee.slice(0, titleCharIndex);
+      document.title = text;
+
+      const isStart = titleCharIndex === 0;
+      titleCharIndex = (titleCharIndex + 1) % marquee.length;
+
+      // Hold stationary for 2.5s at start of loop, then glide smoothly at 130ms
+      const delay = isStart ? 2500 : 130;
+      titleScrollTimer = setTimeout(scrollStep, delay);
+    }
+
+    if (!titleScrollTimer) {
+      scrollStep();
+    }
+  }
+
+  $: updateDocumentTitle(currentPlayingTrack);
+
   onDestroy(() => {
     clearNudgeTimers();
+    if (autoRollFastLaunchTimer) {
+      clearTimeout(autoRollFastLaunchTimer);
+      autoRollFastLaunchTimer = null;
+    }
+    if (titleScrollTimer) {
+      clearTimeout(titleScrollTimer);
+      titleScrollTimer = null;
+    }
+    if (typeof document !== 'undefined') {
+      document.title = 'Track RNG';
+    }
     if (rafId) {
       cancelAnimationFrame(rafId);
       rafId = null;
@@ -732,13 +853,83 @@
         handleDismissScreenWarning();
         return;
       }
+      if (e.key === ' ' || e.code === 'Space') {
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') {
+          return;
+        }
+        e.preventDefault();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+          document.activeElement.blur();
+        }
+        if ($isBinderPlaying) {
+          toggleBinderAudio();
+        } else if ($isCrateReady) {
+          toggleArenaAudio();
+        }
+        return;
+      }
       if (e.key === 'r' || e.key === 'R') {
-        if ($isCrateReady && !showScreenWarning && !$isSpinning && document.activeElement?.tagName !== 'INPUT') {
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') {
+          return;
+        }
+        e.preventDefault();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+          document.activeElement.blur();
+        }
+        if ($isCrateReady && !showScreenWarning && !$isSpinning) {
           triggerRoll();
         }
+        return;
+      }
+      if (e.key === 's' || e.key === 'S') {
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') {
+          return;
+        }
+        e.preventDefault();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+          document.activeElement.blur();
+        }
+        const trackToStar = $isBinderPlaying ? $activeBinderTrack : ($activeWinnerCard || $activeArenaTrack);
+        if (trackToStar?.id) {
+          toggleStar(trackToStar.id);
+          playUiTapSound();
+        }
+        return;
+      }
+      if (e.key === 'f' || e.key === 'F') {
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') {
+          return;
+        }
+        if ($activeModal) return;
+        e.preventDefault();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+          document.activeElement.blur();
+        }
+        isAutoSkip.update((val) => !val);
+        return;
+      }
+      if (e.key === 'a' || e.key === 'A') {
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') {
+          return;
+        }
+        if ($activeModal) return;
+        e.preventDefault();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+          document.activeElement.blur();
+        }
+        cycleAutoRoll();
+        return;
       }
       if (e.key === 'Escape') {
-        activeModal.set(null);
+        if ($activeModal) {
+          activeModal.set(null);
+          e.stopPropagation();
+        }
       }
     };
     window.addEventListener('keydown', handleKeydown);

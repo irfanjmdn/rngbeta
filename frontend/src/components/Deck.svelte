@@ -8,6 +8,7 @@
     isRollShimmerActive,
     autoRollMode,
     arenaAudioTime,
+    isArenaPlaying,
   } from '../lib/store.js';
 
   export let onRoll = () => {};
@@ -56,6 +57,7 @@
   function handleKeydown(e) {
     if (isMenuOpen && e.key === 'Escape') {
       isMenuOpen = false;
+      e.stopPropagation();
     }
   }
 
@@ -72,7 +74,8 @@
     }
   }
 
-  function handleRollClick() {
+  function handleRollClick(e) {
+    if (e?.currentTarget?.blur) e.currentTarget.blur();
     clearPostRollNudge();
     if (!$isSpinning) {
       isLaunching = true;
@@ -84,10 +87,36 @@
     }
   }
 
-  function handleAutoRollToggle() {
+  let autoRollImmediateLaunchTimer = null;
+
+  function handleAutoRollToggle(e) {
+    if (e?.currentTarget?.blur) e.currentTarget.blur();
     isAutoRolling.update((val) => {
       const next = !val;
       if (next && !$isSpinning) {
+        if ($autoRollMode === 'immediate') {
+          // 1.5s delay after turned on (like not rolled yet), then continued like normal
+          clearPostRollNudge();
+          if (autoRollImmediateLaunchTimer) clearTimeout(autoRollImmediateLaunchTimer);
+          autoRollImmediateLaunchTimer = setTimeout(() => {
+            autoRollImmediateLaunchTimer = null;
+            if ($isAutoRolling && $autoRollMode === 'immediate' && !$isSpinning) {
+              isLaunching = true;
+              if (launchTimer) clearTimeout(launchTimer);
+              launchTimer = setTimeout(() => {
+                isLaunching = false;
+              }, 280);
+              onRoll();
+            }
+          }, 1500);
+          return next;
+        }
+
+        // In on_track_end mode, if a track is actively playing, wait for it to finish naturally
+        if ($autoRollMode === 'on_track_end' && $isArenaPlaying) {
+          return next;
+        }
+
         clearPostRollNudge();
         isLaunching = true;
         if (launchTimer) clearTimeout(launchTimer);
@@ -95,12 +124,18 @@
           isLaunching = false;
         }, 280);
         onRoll();
+      } else if (!next) {
+        if (autoRollImmediateLaunchTimer) {
+          clearTimeout(autoRollImmediateLaunchTimer);
+          autoRollImmediateLaunchTimer = null;
+        }
       }
       return next;
     });
   }
 
-  function handleAutoSkipToggle() {
+  function handleAutoSkipToggle(e) {
+    if (e?.currentTarget?.blur) e.currentTarget.blur();
     isAutoSkip.update((val) => !val);
   }
 
@@ -172,7 +207,7 @@
           <path d="M21 13v1a4 4 0 0 1-4 4H3" />
         </svg>
         <span class="deck-btn-label">
-          {$autoRollMode === 'on_track_end' ? 'Auto-roll (Track)' : 'Auto-roll'}
+          {$autoRollMode === 'on_track_end' ? 'Auto-roll (Track)' : 'Auto-roll (Fast)'}
         </span>
         <span class="auto-roll-status-dot"></span>
         <span id="lblAutoRoll" style="display:none;">
@@ -211,14 +246,14 @@
           <button
             type="button"
             role="menuitem"
-            class="flyout-menu-item {$autoRollMode === 'immediate' ? 'selected' : ''}"
-            on:click={() => setAutoRollMode('immediate')}
+            class="flyout-menu-item {$autoRollMode === 'on_track_end' ? 'selected' : ''}"
+            on:click={() => setAutoRollMode('on_track_end')}
           >
             <div class="flyout-item-text">
-              <span class="flyout-item-title">Immediate</span>
-              <span class="flyout-item-desc">Rolls as soon as spin ends</span>
+              <span class="flyout-item-title">Track (Default)</span>
+              <span class="flyout-item-desc">Plays preview, rolls on track end</span>
             </div>
-            {#if $autoRollMode === 'immediate'}
+            {#if $autoRollMode === 'on_track_end'}
               <svg class="flyout-check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
@@ -227,14 +262,14 @@
           <button
             type="button"
             role="menuitem"
-            class="flyout-menu-item {$autoRollMode === 'on_track_end' ? 'selected' : ''}"
-            on:click={() => setAutoRollMode('on_track_end')}
+            class="flyout-menu-item {$autoRollMode === 'immediate' ? 'selected' : ''}"
+            on:click={() => setAutoRollMode('immediate')}
           >
             <div class="flyout-item-text">
-              <span class="flyout-item-title">On Track End</span>
-              <span class="flyout-item-desc">Plays 30s preview, rolls on end</span>
+              <span class="flyout-item-title">Fast</span>
+              <span class="flyout-item-desc">Rolls as soon as spin ends</span>
             </div>
-            {#if $autoRollMode === 'on_track_end'}
+            {#if $autoRollMode === 'immediate'}
               <svg class="flyout-check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
@@ -274,7 +309,7 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
           <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
         </svg>
-        <span id="lblRollBtn">ROLL (R)</span>
+        <span id="lblRollBtn">ROLL<span class="roll-key-hint"> (R)</span></span>
       </button>
     </div>
   </div>

@@ -18,10 +18,17 @@ export const isAutoSkip = writable(false);
 export const isRollNudgeActive = writable(false);
 export const isRollShimmerActive = writable(false);
 export const autoRollMode = writable(
-  typeof localStorage !== 'undefined' && localStorage.getItem('crate_autoroll_mode') === 'on_track_end'
-    ? 'on_track_end'
-    : 'immediate'
-); // 'immediate' | 'on_track_end'
+  typeof localStorage !== 'undefined' && localStorage.getItem('crate_autoroll_mode') === 'immediate'
+    ? 'immediate'
+    : 'on_track_end'
+); // 'on_track_end' (default) | 'immediate'
+
+export const isPageVisible = writable(typeof document !== 'undefined' ? !document.hidden : true);
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    isPageVisible.set(!document.hidden);
+  });
+}
 
 export const activeWinnerCard = writable(null);
 export const activeArenaTrack = writable(null);

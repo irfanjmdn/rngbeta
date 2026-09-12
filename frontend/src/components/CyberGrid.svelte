@@ -80,6 +80,11 @@
     let currentB = tierRgb.b;
 
     function render(timestamp) {
+      if (typeof document !== 'undefined' && document.hidden) {
+        animId = null;
+        return;
+      }
+
       if (!ctx || width === 0 || height === 0) {
         animId = requestAnimationFrame(render);
         return;
@@ -206,8 +211,24 @@
 
     animId = requestAnimationFrame(render);
 
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && !document.hidden && !animId) {
+        lastTime = performance.now();
+        animId = requestAnimationFrame(render);
+      } else if (typeof document !== 'undefined' && document.hidden && animId) {
+        cancelAnimationFrame(animId);
+        animId = null;
+      }
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
     return () => {
       window.removeEventListener('resize', resize);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
       if (animId) cancelAnimationFrame(animId);
     };
   });

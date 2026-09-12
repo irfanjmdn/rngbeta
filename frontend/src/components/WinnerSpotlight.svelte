@@ -9,6 +9,7 @@
     arenaAudioTime,
     rngTracks,
     isSpinning,
+    activeModal,
     unplayableTrackIds,
   } from '../lib/store.js';
   import { isPlaceholderCover, fetchTrackDetails } from '../lib/artCache.js';
@@ -273,12 +274,140 @@
     jogIdleTimer = null;
   }
 
-  function handleKeydown(e) {
-    if (e.key === ' ' || e.key === 'Enter') {
-      e.preventDefault();
-      onToggleAudio();
+  let activeArrowKey = null;
+  let arrowHoldTimer = null;
+  let smoothSeekRafId = null;
+  let lastSeekTickTime = 0;
+  let lastSoundTickTime = 0;
+  let smoothSeekStartTime = 0;
+
+  function startSmoothSeekLoop(isForward) {
+    if (smoothSeekRafId) return;
+    lastSeekTickTime = performance.now();
+    lastSoundTickTime = performance.now();
+    smoothSeekStartTime = performance.now();
+
+    function tick(now) {
+      const dt = Math.min(0.064, (now - lastSeekTickTime) / 1000);
+      lastSeekTickTime = now;
+
+      const dur = $arenaAudioTime?.duration || 30;
+      const holdSec = (now - smoothSeekStartTime) / 1000;
+      // High-speed seeking: 10s/s base, scaling with track length, accelerating up to 2.5x
+      const baseSpeed = Math.max(10, Math.min(22, dur * 0.08));
+      const accel = Math.min(2.5, 1 + holdSec * 1.2);
+      const seekSpeed = baseSpeed * accel;
+
+      const frameDelta = (isForward ? 1 : -1) * seekSpeed * dt;
+      jogTargetTime = Math.max(0, Math.min(dur, jogTargetTime + frameDelta));
+      jogTargetDeltaAccum += frameDelta;
+
+      const soundInterval = Math.max(70, 140 / accel);
+      if (now - lastSoundTickTime > soundInterval) {
+        lastSoundTickTime = now;
+        playJogDialSound(isForward);
+      }
+
+      smoothSeekRafId = requestAnimationFrame(tick);
+    }
+
+    smoothSeekRafId = requestAnimationFrame(tick);
+  }
+
+  function stopSmoothSeekLoop() {
+    if (smoothSeekRafId) {
+      cancelAnimationFrame(smoothSeekRafId);
+      smoothSeekRafId = null;
     }
   }
+
+  function handleArrowKeyDown(e) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if ($activeModal) return;
+    if (!$activeWinnerCard || !$activeWinnerCard.preview_url || $unplayableTrackIds.has($activeWinnerCard.id)) return;
+    const dur = $arenaAudioTime?.duration || 0;
+    if (dur <= 0) return;
+
+    e.preventDefault();
+
+    if (e.repeat) return;
+
+    if (activeArrowKey && activeArrowKey !== e.key) {
+      if (arrowHoldTimer) {
+        clearTimeout(arrowHoldTimer);
+        arrowHoldTimer = null;
+      }
+      stopSmoothSeekLoop();
+    }
+
+    activeArrowKey = e.key;
+    const isForward = e.key === 'ArrowRight';
+    jogDirection = isForward ? 'forward' : 'backward';
+
+    if (!isJogActive) {
+      isJogActive = true;
+      jogSeekTime = $arenaAudioTime.current || 0;
+      jogTargetTime = jogSeekTime;
+      jogDeltaAccum = 0;
+      jogTargetDeltaAccum = 0;
+      startJogLerpLoop();
+    }
+
+    const step = isForward ? 5 : -5;
+    jogTargetTime = Math.max(0, Math.min(dur, jogTargetTime + step));
+    jogTargetDeltaAccum += step;
+    playJogDialSound(isForward);
+
+    if (jogIdleTimer) {
+      clearTimeout(jogIdleTimer);
+      jogIdleTimer = null;
+    }
+    if (arrowHoldTimer) {
+      clearTimeout(arrowHoldTimer);
+      arrowHoldTimer = null;
+    }
+
+    arrowHoldTimer = setTimeout(() => {
+      arrowHoldTimer = null;
+      startSmoothSeekLoop(isForward);
+    }, 220);
+  }
+
+  function handleArrowKeyUp(e) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (e.key === activeArrowKey) {
+      activeArrowKey = null;
+      if (arrowHoldTimer) {
+        clearTimeout(arrowHoldTimer);
+        arrowHoldTimer = null;
+      }
+      stopSmoothSeekLoop();
+
+      if (isJogActive) {
+        if (jogIdleTimer) clearTimeout(jogIdleTimer);
+        jogIdleTimer = setTimeout(() => {
+          onJogSettle();
+        }, 200);
+      }
+    }
+  }
+
+  function handleArrowBlur() {
+    if (activeArrowKey) {
+      activeArrowKey = null;
+      if (arrowHoldTimer) {
+        clearTimeout(arrowHoldTimer);
+        arrowHoldTimer = null;
+      }
+      stopSmoothSeekLoop();
+      if (isJogActive) {
+        onJogSettle();
+      }
+    }
+  }
+
 
   function handleSpotifyClick(e) {
     const uri = $activeWinnerCard?.spotify_url || $activeWinnerCard?.playlist_url || $activeWinnerCard?.uri;
@@ -289,6 +418,10 @@
   }
 
   function tickSubBass() {
+    if (typeof document !== 'undefined' && document.hidden) {
+      bassRafId = null;
+      return;
+    }
     if ($isArenaPlaying) {
       const metrics = getTargetBassPeakMetrics(20, 150);
       const rawEnergy = metrics.energy;
@@ -358,6 +491,10 @@
   }
 
   function tickTilt() {
+    if (typeof document !== 'undefined' && document.hidden) {
+      tiltRafId = null;
+      return;
+    }
     // High-fidelity spring/lerp damping (alpha = 0.10)
     const factor = 0.10;
     currentTiltX += (targetTiltX - currentTiltX) * factor;
@@ -408,18 +545,44 @@
     tiltRafId = requestAnimationFrame(tickTilt);
   }
 
+  function handleVisibilityChange() {
+    if (typeof document !== 'undefined' && !document.hidden) {
+      rumbleX = 0;
+      rumbleY = 0;
+      if (!bassRafId) bassRafId = requestAnimationFrame(tickSubBass);
+      if (!tiltRafId) tiltRafId = requestAnimationFrame(tickTilt);
+    } else if (typeof document !== 'undefined' && document.hidden) {
+      if (bassRafId) { cancelAnimationFrame(bassRafId); bassRafId = null; }
+      if (tiltRafId) { cancelAnimationFrame(tiltRafId); tiltRafId = null; }
+    }
+  }
+
   onMount(() => {
     bassRafId = requestAnimationFrame(tickSubBass);
     tiltRafId = requestAnimationFrame(tickTilt);
     window.addEventListener('pointermove', handleGlobalPointerMove, { passive: true });
+    window.addEventListener('keydown', handleArrowKeyDown);
+    window.addEventListener('keyup', handleArrowKeyUp);
+    window.addEventListener('blur', handleArrowBlur);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
   });
 
   onDestroy(() => {
     if (jogIdleTimer) clearTimeout(jogIdleTimer);
     if (jogAudioSeekThrottleTimer) clearTimeout(jogAudioSeekThrottleTimer);
     if (jogLerpRafId) cancelAnimationFrame(jogLerpRafId);
+    if (arrowHoldTimer) clearTimeout(arrowHoldTimer);
+    stopSmoothSeekLoop();
     if (typeof window !== 'undefined') {
       window.removeEventListener('pointermove', handleGlobalPointerMove);
+      window.removeEventListener('keydown', handleArrowKeyDown);
+      window.removeEventListener('keyup', handleArrowKeyUp);
+      window.removeEventListener('blur', handleArrowBlur);
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     }
     if (bassRafId) {
       cancelAnimationFrame(bassRafId);
@@ -453,16 +616,16 @@
   </div>
 
   <div class="winner-art-column" id="winnerArtColumn">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
       class="winner-art-wrap"
       id="winnerArtWrap"
       role="button"
-      tabindex={$activeWinnerCard && $activeWinnerCard.preview_url && !$unplayableTrackIds.has($activeWinnerCard.id) ? 0 : -1}
+      tabindex="-1"
       aria-disabled={!$activeWinnerCard || !$activeWinnerCard.preview_url || $unplayableTrackIds.has($activeWinnerCard.id)}
       aria-label={$activeWinnerCard && $activeWinnerCard.preview_url && !$unplayableTrackIds.has($activeWinnerCard.id) ? "Play or pause audio preview" : "Album cover"}
       style={$activeWinnerCard && (!$activeWinnerCard.preview_url || $unplayableTrackIds.has($activeWinnerCard.id)) ? "cursor: default;" : ""}
       on:click={$activeWinnerCard && $activeWinnerCard.preview_url && !$unplayableTrackIds.has($activeWinnerCard.id) ? onToggleAudio : null}
-      on:keydown={$activeWinnerCard && $activeWinnerCard.preview_url && !$unplayableTrackIds.has($activeWinnerCard.id) ? handleKeydown : null}
     >
       <img
         class="winner-art-img {$activeWinnerCard && isPlaceholderCover($activeWinnerCard) ? 'is-placeholder-art' : ''}"
@@ -509,7 +672,6 @@
           <!-- Top Row: Minimal Telemetry Delta Chip -->
           <div class="jog-hud-top-bar">
             <div class="jog-hud-delta-pill {jogDirection}" id="jogHudDeltaPill">
-              <span class="jog-hud-delta-dir">{jogDirection === 'forward' ? 'FWD' : 'REV'}</span>
               <span class="jog-hud-delta-val">
                 {jogDeltaAccum >= 0 ? '+' : ''}{jogDeltaAccum.toFixed(1)}s
               </span>
@@ -712,7 +874,7 @@
           {:else if $activeWinnerCard.source === 'soundcloud'}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
               <path
-                d="M1.17 12.23c-.05 0-.1.04-.1.1v4.83c0 .06.05.1.1.1h.47c.06 0 .1-.04.1-.1v-4.83c0-.06-.04-.1-.1-.1h-.47zm1.18-.55c-.06 0-.1.05-.1.1v5.93c0 .06.04.1.1.1h.47c.05 0 .1-.04.1-.1v-5.93c0-.05-.05-.1-.1-.1h-.47zm1.17-.67c-.06 0-.1.05-.1.1v7.28c0 .05.04.1.1.1h.48c.05 0 .1-.05.1-.1v-7.28c0-.05-.05-.1-.1-.1h-.48zm1.18-.32c-.05 0-.1.04-.1.1v7.92c0 .05.05.1.1.1h.47c.06 0 .1-.05.1-.1v-7.92c0-.06-.04-.1-.1-.1h-.47zm1.18-.08c-.06 0-.1.05-.1.1v8.08c0 .06.04.1.1.1h.47c.06 0 .1-.04.1-.1v-8.08c0-.05-.04-.1-.1-.1h-.47zm1.17-.23c-.05 0-.1.05-.1.1v8.39c0 .05.05.1.1.1h.48c.05 0 .1-.05.1-.1v-8.39c0-.05-.05-.1-.1-.1h-.48zm1.18-.46c-.05 0-.1.05-.1.1v8.93c0 .05.05.1.1.1h.47c.06 0 .1-.05.1-.1V9.92c0-.05-.04-.1-.1-.1h-.47zm1.18-.54c-.05 0-.1.04-.1.1v9.55c0 .05.05.1.1.1h.47c.06 0 .1-.05.1-.1V9.38c0-.06-.04-.1-.1-.1h-.47zm1.17-.24c-.05 0-.1.05-.1.1v9.87c0 .06.05.1.1.1h.48c.05 0 .1-.04.1-.1V9.14c0-.05-.05-.1-.1-.1h-.48zm1.53-.45c.16-.62.47-1.18.91-1.63.76-.78 1.8-1.24 2.92-1.24.45 0 .88.08 1.28.23.47.18.89.46 1.23.82.26.27.47.58.62.92.51-.31 1.1-.48 1.73-.48 1.78 0 3.23 1.45 3.23 3.23 0 .12-.01.24-.03.35.98.53 1.64 1.56 1.64 2.75 0 1.74-1.41 3.15-3.15 3.15H11.8c-.06 0-.1-.04-.1-.1V8.79c0-.05-.04-.1-.1-.1h-.63z"
+                d="M23.999 14.165c-.052 1.796-1.612 3.169-3.4 3.169h-8.18a.68.68 0 0 1-.675-.683V7.862a.747.747 0 0 1 .452-.724s.75-.513 2.333-.513a5.364 5.364 0 0 1 2.763.755 5.433 5.433 0 0 1 2.57 3.54c.282-.08.574-.121.868-.12.884 0 1.73.358 2.347.992s.948 1.49.922 2.373ZM10.721 8.421c.247 2.98.427 5.697 0 8.672a.264.264 0 0 1-.53 0c-.395-2.946-.22-5.718 0-8.672a.264.264 0 0 1 .53 0ZM9.072 9.448c.285 2.659.37 4.986-.006 7.655a.277.277 0 0 1-.55 0c-.331-2.63-.256-5.02 0-7.655a.277.277 0 0 1 .556 0Zm-1.663-.257c.27 2.726.39 5.171 0 7.904a.266.266 0 0 1-.532 0c-.38-2.69-.257-5.21 0-7.904a.266.266 0 0 1 .532 0Zm-1.647.77a26.108 26.108 0 0 1-.008 7.147.272.272 0 0 1-.542 0 27.955 27.955 0 0 1 0-7.147.275.275 0 0 1 .55 0Zm-1.67 1.769c.421 1.865.228 3.5-.029 5.388a.257.257 0 0 1-.514 0c-.21-1.858-.398-3.549 0-5.389a.272.272 0 0 1 .543 0Zm-1.655-.273c.388 1.897.26 3.508-.01 5.412-.026.28-.514.283-.54 0-.244-1.878-.347-3.54-.01-5.412a.283.283 0 0 1 .56 0Zm-1.668.911c.4 1.268.257 2.292-.026 3.572a.257.257 0 0 1-.514 0c-.241-1.262-.354-2.312-.023-3.572a.283.283 0 0 1 .563 0Z"
               />
             </svg>
             <span>Listen on SoundCloud</span>

@@ -66,13 +66,19 @@
   opacity: 0.9 !important;
 }
 
-/* Accessible Focus Visible Outlines */
+/* Accessible Focus Visible Outlines (suppressed on buttons to prevent shortcut highlights) */
+button:focus,
 button:focus-visible,
+select:focus,
 select:focus-visible,
+[role="slider"]:focus,
 [role="slider"]:focus-visible,
-summary:focus-visible {
-  outline: 2px solid var(--brand-green) !important;
-  outline-offset: 2px !important;
+summary:focus,
+summary:focus-visible,
+[role="button"]:focus,
+[role="button"]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 input:focus-visible,
@@ -1164,14 +1170,20 @@ body {
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0;
-  color: #F43F5E;
+  color: #FFFFFF;
   text-transform: none;
   white-space: nowrap;
   line-height: 1;
+  transition: color 0.35s ease-out;
 }
 
 .hud-brand-title.is-holding .hud-brand-kaomoji {
+  color: #FFFFFF;
   animation: boil-text 0.14s steps(1) infinite;
+}
+
+.hud-brand-title.is-holding .hud-brand-kaomoji.is-holding-red {
+  color: #F43F5E;
 }
 
 .hud-brand-title.is-released,
@@ -1401,6 +1413,13 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 0.15s ease-out;
+}
+
+.hud-brand-sub.is-hint-active {
+  color: #F59E0B !important;
+  font-weight: 700;
+  letter-spacing: 0.03em;
 }
 
 .game-hud-overlay {
@@ -1718,12 +1737,12 @@ body {
     background-color: var(--bg-base);
   }
 
-  /* HUD overlay on mobile */
+  /* HUD overlay on mobile - elevated so bottom tab bar stays persistent across views */
   .game-hud-overlay {
     position: fixed !important;
     inset: 0 !important;
     pointer-events: none !important;
-    z-index: 90 !important;
+    z-index: 300 !important;
   }
 
   /* --------------------------------------------------------------------------
@@ -1912,7 +1931,7 @@ body {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
     align-items: stretch;
-    z-index: 100 !important;
+    z-index: 310 !important;
     pointer-events: auto !important;
     box-sizing: border-box;
     user-select: none;
@@ -2003,8 +2022,8 @@ body {
     justify-content: flex-start;
     padding: 0 10px;
     padding-top: calc(52px + max(8px, env(safe-area-inset-top, 0px)));
-    padding-bottom: calc(130px + max(12px, env(safe-area-inset-bottom, 0px)));
-    gap: 10px;
+    padding-bottom: calc(185px + max(12px, env(safe-area-inset-bottom, 0px)));
+    gap: 8px;
     box-sizing: border-box;
     overflow-y: auto;
     overflow-x: hidden;
@@ -2019,8 +2038,8 @@ body {
      -------------------------------------------------------------------------- */
   .spinner-machine-wrap {
     width: 100%;
-    max-height: 210px;
-    min-height: 170px;
+    max-height: 180px;
+    min-height: 155px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2030,7 +2049,7 @@ body {
   }
 
   .reel-viewport {
-    height: 175px;
+    height: 155px;
     mask-image: none !important;
     -webkit-mask-image: none !important;
   }
@@ -2041,10 +2060,10 @@ body {
   }
 
   .reel-card {
-    width: 120px;
-    height: 144px;
-    margin: 0 4px;
-    padding: 6px 0 0 0;
+    width: 110px;
+    height: 134px;
+    margin: 0 3px;
+    padding: 4px 0 0 0;
     border-radius: 0;
     background: #0C1018;
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2057,29 +2076,29 @@ body {
   }
 
   .reel-card-art-wrap {
-    width: 62px;
-    height: 62px;
-    margin-bottom: 5px;
+    width: 56px;
+    height: 56px;
+    margin-bottom: 4px;
     border-radius: 0;
   }
 
   .reel-card-title {
-    font-size: 10px;
+    font-size: 9.5px;
     margin-bottom: 1px;
     padding: 0 4px;
   }
 
   .reel-card-artist {
-    font-size: 8.5px;
-    margin-bottom: 3px;
+    font-size: 8px;
+    margin-bottom: 2px;
     padding: 0 4px;
   }
 
   .reel-card-tier-banner {
-    height: 20px;
-    font-size: 8.5px;
+    height: 18px;
+    font-size: 8px;
     letter-spacing: 0.05em;
-    line-height: 20px;
+    line-height: 18px;
     border-radius: 0;
   }
 
@@ -2096,8 +2115,8 @@ body {
   }
 
   .reticle-target-box {
-    width: 128px;
-    height: 152px;
+    width: 118px;
+    height: 142px;
     border-radius: 0;
   }
 
@@ -2514,10 +2533,10 @@ body {
 
   .btn-big-roll {
     width: 100% !important;
-    height: 52px !important;
+    height: 48px !important;
     min-width: 0 !important;
     font-family: var(--font-display) !important;
-    font-size: 15px !important;
+    font-size: 14px !important;
     font-weight: 900 !important;
     letter-spacing: 0.08em !important;
     background: var(--brand-green) !important;
@@ -2534,6 +2553,10 @@ body {
     transition: transform 0.08s, filter 0.15s !important;
   }
 
+  .roll-key-hint {
+    display: none !important;
+  }
+
   .btn-big-roll:active,
   .btn-big-roll.is-launching {
     transform: scale(0.98) !important;
@@ -2542,18 +2565,27 @@ body {
 
   /* --------------------------------------------------------------------------
      7. FULLSCREEN SLIDE-OVER SHEET MODALS (CATALOGUE, RATES, SETTINGS)
-     Mobile native sheet presentation with sticky headers
+     Mobile native tab/sheet presentation ending above bottom nav bar
      -------------------------------------------------------------------------- */
   .game-binder-modal,
   .game-rates-modal,
   .game-settings-modal {
     position: fixed !important;
-    inset: 0 !important;
-    z-index: 200 !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: calc(52px + max(6px, env(safe-area-inset-bottom, 0px))) !important;
+    height: auto !important;
+    max-height: calc(100dvh - 52px - max(6px, env(safe-area-inset-bottom, 0px))) !important;
+    z-index: 150 !important;
     padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
     align-items: stretch !important;
     justify-content: stretch !important;
     background: #06080D !important;
+    overflow: hidden !important;
   }
 
   .game-binder-modal.open,
@@ -2580,8 +2612,7 @@ body {
     width: 100% !important;
     max-width: 100% !important;
     height: 100% !important;
-    height: 100dvh !important;
-    max-height: 100dvh !important;
+    max-height: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
     background: #06080D !important;
@@ -2591,10 +2622,14 @@ body {
     display: flex !important;
     flex-direction: column !important;
     box-sizing: border-box !important;
+    overflow: hidden !important;
   }
 
   /* Modal Headers */
+  .binder-modal-header,
   .binder-header-bar,
+  .rates-dialog-content .modal-header,
+  .settings-dialog-content .modal-header,
   .rates-header-bar,
   .settings-header-bar {
     height: calc(48px + max(8px, env(safe-area-inset-top, 0px))) !important;
@@ -2606,11 +2641,15 @@ body {
     justify-content: space-between !important;
     flex-shrink: 0 !important;
     box-sizing: border-box !important;
+    margin-bottom: 0 !important;
   }
 
+  .binder-title,
   .binder-header-title,
   .rates-header-title,
-  .settings-header-title {
+  .settings-header-title,
+  .rates-dialog-content .modal-title,
+  .settings-dialog-content .modal-title {
     font-family: var(--font-display) !important;
     font-size: 13.5px !important;
     font-weight: 900 !important;
@@ -2627,9 +2666,9 @@ body {
   #btnCloseBinderModal,
   #btnCloseRatesModal,
   #btnCloseSettingsModal {
-    width: 36px !important;
-    height: 36px !important;
-    min-width: 36px !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
     background: #161D2B !important;
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
     color: #F8FAFC !important;
@@ -2787,29 +2826,43 @@ body {
   }
 
   /* Rates Modal Content */
-  .rates-body-scroll {
+  .rates-list {
     flex: 1 !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
     padding: 12px !important;
+    margin-bottom: 0 !important;
+    gap: 8px !important;
   }
 
-  .rates-tier-row {
-    padding: 10px 8px !important;
-    min-height: 48px !important;
+  .rates-row {
+    padding: 10px 12px !important;
+    min-height: 46px !important;
+  }
+
+  .rates-note {
+    margin: 0 12px 12px 12px !important;
+    padding: 8px 10px !important;
+    font-size: 11px !important;
+    flex-shrink: 0 !important;
   }
 
   /* Settings Modal Content */
-  .settings-body-scroll {
+  .settings-body {
     flex: 1 !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
     padding: 12px !important;
   }
 
+  .settings-section {
+    padding: 12px 10px !important;
+    margin-bottom: 10px !important;
+  }
+
   .settings-row {
-    padding: 12px 8px !important;
-    min-height: 48px !important;
+    padding: 4px 0 !important;
+    min-height: 36px !important;
   }
 
   /* --------------------------------------------------------------------------
@@ -3554,8 +3607,7 @@ body {
   backdrop-filter: blur(2px);
 }
 
-.winner-art-wrap:hover .winner-art-hover-overlay,
-.winner-art-wrap:focus-visible .winner-art-hover-overlay {
+.winner-art-wrap:hover .winner-art-hover-overlay {
   opacity: 1;
 }
 
@@ -3627,13 +3679,6 @@ body {
   color: #F59E0B;
   background: rgba(245, 158, 11, 0.12);
   border-color: rgba(245, 158, 11, 0.3);
-}
-
-.jog-hud-delta-dir {
-  font-size: 8px;
-  opacity: 0.75;
-  font-weight: 800;
-  letter-spacing: 0.08em;
 }
 
 /* Hero Timestamp Display */

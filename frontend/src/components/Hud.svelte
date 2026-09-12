@@ -134,12 +134,21 @@
   let hoverTimer = null;
   let releaseTimer = null;
   let cancelTimers = [];
+  const MAX_LOGOUT_HINTS = 3;
+  let logoutHintCount = typeof localStorage !== 'undefined'
+    ? parseInt(localStorage.getItem('crate_logout_hint_count') || '0', 10)
+    : 0;
+  let showLogoutHint = false;
+  let logoutHintTimer = null;
+  let isHoldRed = false;
 
   $: brandDisplayState = isHolding
     ? 'holding'
     : showReleaseKaomoji
     ? 'released'
     : 'default';
+
+  $: isKaomojiActive = brandDisplayState !== 'default';
 
   function clearSquarePipTimers() {
     cancelTimers.forEach((t) => clearTimeout(t));
@@ -175,6 +184,10 @@
     if (rumbleAudioController) {
       rumbleAudioController.stop();
       rumbleAudioController = null;
+    }
+    if (logoutHintTimer) {
+      clearTimeout(logoutHintTimer);
+      logoutHintTimer = null;
     }
   });
 
@@ -216,6 +229,15 @@
 
     // Switch view to front page while the red wipe covers the screen
     isCrateReady.set(false);
+    showLogoutHint = false;
+    if (logoutHintTimer) {
+      clearTimeout(logoutHintTimer);
+      logoutHintTimer = null;
+    }
+    logoutHintCount = MAX_LOGOUT_HINTS;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('crate_logout_hint_count', String(MAX_LOGOUT_HINTS));
+    }
 
     // Fade out the logout transition shroud revealing the front page
     setTimeout(() => {
@@ -234,6 +256,7 @@
       holdAnimFrame = null;
     }
     isHolding = true;
+    isHoldRed = false;
     isShiftActive = Boolean(e && e.shiftKey);
     effectiveElapsed = 0;
     lastHoldTickTime = performance.now();
@@ -258,6 +281,11 @@
 
     const speed = isShiftActive ? 3 : 1;
     effectiveElapsed += dt * speed;
+
+    // Kaomoji color: white for first 0.75s, then fade to red
+    if (effectiveElapsed >= 750 && !isHoldRed) {
+      isHoldRed = true;
+    }
 
     // Stage 1: Red circle expands to cover viewport over EXPAND_DURATION_MS
     const circleLinear = Math.min(1, effectiveElapsed / EXPAND_DURATION_MS);
@@ -346,6 +374,7 @@
   function cancelHold() {
     if (!isHolding) return;
     isHolding = false;
+    isHoldRed = false;
     if (hoverTimer) {
       clearTimeout(hoverTimer);
       hoverTimer = null;
@@ -360,6 +389,20 @@
       showReleaseKaomoji = false;
       isLogoutHovered = false;
     }, 500);
+
+    // Show hint at hudAccountSub for maximum 3 times, duration 2 seconds
+    if (logoutHintCount < MAX_LOGOUT_HINTS) {
+      logoutHintCount += 1;
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('crate_logout_hint_count', String(logoutHintCount));
+      }
+      showLogoutHint = true;
+      if (logoutHintTimer) clearTimeout(logoutHintTimer);
+      logoutHintTimer = setTimeout(() => {
+        showLogoutHint = false;
+        logoutHintTimer = null;
+      }, 2000);
+    }
 
     shrinkStartProgress = holdProgress;
     shrinkStartTime = performance.now();
@@ -436,30 +479,38 @@
     }
   }
 
-  function handleOpenBinder() {
+  function handleSelectTab(tabName) {
     playUiTapSound();
-    seenUnlockedCount = $unlockedCount;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(currentKey, String(seenUnlockedCount));
+    if (tabName === 'arena') {
+      activeModal.set(null);
+    } else if (tabName === 'binder') {
+      seenUnlockedCount = $unlockedCount;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(currentKey, String(seenUnlockedCount));
+      }
+      activeModal.set('binder');
+    } else if (tabName === 'rates') {
+      activeModal.set('rates');
+    } else if (tabName === 'settings') {
+      activeModal.set('settings');
     }
-    activeModal.set('binder');
+  }
+
+  function handleOpenBinder() {
+    handleSelectTab('binder');
   }
 
   function handleCloseBinder() {
     playUiTapSound();
-    if ($activeModal === 'binder') {
-      activeModal.set(null);
-    }
+    activeModal.set(null);
   }
 
   function handleOpenRates() {
-    playUiTapSound();
-    activeModal.set('rates');
+    handleSelectTab('rates');
   }
 
   function handleOpenSettings() {
-    playUiTapSound();
-    activeModal.set('settings');
+    handleSelectTab('settings');
   }
 
   function toggleCollapse() {
@@ -482,11 +533,32 @@
     if (e.key === 'Shift') {
       isShiftActive = true;
     }
+    if (e.key === 'Escape') {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if ($activeModal) return;
+      if (!$isCrateReady || $isSpinning || holdCompleted) return;
+      if (e.repeat) return;
+      e.preventDefault();
+      handleHoldStart(e);
+    }
   }
 
   function handleWindowKeyUp(e) {
     if (e.key === 'Shift') {
       isShiftActive = false;
+    }
+    if (e.key === 'Escape') {
+      if (isHolding) {
+        e.preventDefault();
+        handleHoldEnd(e);
+      }
+    }
+  }
+
+  function handleWindowBlur() {
+    if (isHolding) {
+      handleHoldEnd();
     }
   }
 
@@ -494,6 +566,7 @@
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', handleWindowKeyDown);
       window.addEventListener('keyup', handleWindowKeyUp);
+      window.addEventListener('blur', handleWindowBlur);
       const mql = window.matchMedia('(max-width: 768px)');
       isMobile = mql.matches;
       const handleMediaChange = (e) => {
@@ -503,6 +576,7 @@
       return () => {
         window.removeEventListener('keydown', handleWindowKeyDown);
         window.removeEventListener('keyup', handleWindowKeyUp);
+        window.removeEventListener('blur', handleWindowBlur);
         mql.removeEventListener('change', handleMediaChange);
       };
     }
@@ -581,12 +655,12 @@
             class:is-holding={brandDisplayState === 'holding'}
             class:is-released={brandDisplayState === 'released'}
           >
-            {#key brandDisplayState}
+            {#key isKaomojiActive}
               <div class="hud-brand-text-slide" transition:fade={{ duration: 100 }}>
-                {#if brandDisplayState === 'holding'}
-                  <span class="hud-brand-kaomoji">{currentHoldKaomoji}</span>
-                {:else if brandDisplayState === 'released'}
-                  <span class="hud-brand-kaomoji">{currentReleaseKaomoji}</span>
+                {#if isKaomojiActive}
+                  <span class="hud-brand-kaomoji" class:is-holding-red={isHolding && isHoldRed}>
+                    {brandDisplayState === 'holding' ? currentHoldKaomoji : currentReleaseKaomoji}
+                  </span>
                 {:else}
                   <span class="hud-brand-default-text">Track RNG</span>
                   <span class="hud-beta-badge">BETA</span>
@@ -594,8 +668,8 @@
               </div>
             {/key}
           </div>
-          <div class="hud-brand-sub" id="hudAccountSub">
-            {$activeUserId || 'Username'} / {$rngTracks.length} Tracks
+          <div class="hud-brand-sub" id="hudAccountSub" class:is-hint-active={showLogoutHint}>
+            {showLogoutHint ? 'Hold button to log out' : `${$activeUserId || 'Username'} / ${$rngTracks.length} Tracks`}
           </div>
         </div>
       </div>
@@ -635,7 +709,7 @@
         id="btnHudArena"
         type="button"
         aria-label="Arena roll screen"
-        on:click={handleCloseBinder}
+        on:click={() => handleSelectTab('arena')}
       >
         <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="10" />
@@ -652,7 +726,7 @@
         id="btnHudBinder"
         type="button"
         aria-label="Open Unlocked Track Catalogue"
-        on:click={handleOpenBinder}
+        on:click={() => handleSelectTab('binder')}
       >
         <div class="mobile-nav-icon-wrap">
           <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -672,7 +746,7 @@
         id="btnHudRates"
         type="button"
         aria-label="View Rarity Probabilities"
-        on:click={handleOpenRates}
+        on:click={() => handleSelectTab('rates')}
       >
         <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <line x1="18" y1="20" x2="18" y2="10" />
@@ -687,7 +761,7 @@
         id="btnHudSettings"
         type="button"
         aria-label="Game and Audio Settings"
-        on:click={handleOpenSettings}
+        on:click={() => handleSelectTab('settings')}
       >
         <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="3" />
@@ -761,12 +835,12 @@
           class:is-holding={brandDisplayState === 'holding'}
           class:is-released={brandDisplayState === 'released'}
         >
-          {#key brandDisplayState}
+          {#key isKaomojiActive}
             <div class="hud-brand-text-slide" transition:fade={{ duration: 100 }}>
-              {#if brandDisplayState === 'holding'}
-                <span class="hud-brand-kaomoji">{currentHoldKaomoji}</span>
-              {:else if brandDisplayState === 'released'}
-                <span class="hud-brand-kaomoji">{currentReleaseKaomoji}</span>
+              {#if isKaomojiActive}
+                <span class="hud-brand-kaomoji" class:is-holding-red={isHolding && isHoldRed}>
+                  {brandDisplayState === 'holding' ? currentHoldKaomoji : currentReleaseKaomoji}
+                </span>
               {:else}
                 <span class="hud-brand-default-text">Track RNG</span>
                 <span class="hud-beta-badge">BETA</span>
@@ -774,8 +848,8 @@
             </div>
           {/key}
         </div>
-        <div class="hud-brand-sub" id="hudAccountSub">
-          {$activeUserId || 'Username'} / {$rngTracks.length} Tracks
+        <div class="hud-brand-sub" id="hudAccountSub" class:is-hint-active={showLogoutHint}>
+          {showLogoutHint ? 'Hold button to log out' : `${$activeUserId || 'Username'} / ${$rngTracks.length} Tracks`}
         </div>
       </div>
     </div>
