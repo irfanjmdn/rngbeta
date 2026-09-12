@@ -19,7 +19,7 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/stream')) {
+  if (url.pathname.includes('/api/') || url.pathname.includes('/stream')) {
     return;
   }
 
