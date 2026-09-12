@@ -81,11 +81,11 @@ export default {
         const userId = userInfo.id;
         const likesCount = userInfo.likes_count || 0;
 
-        // Fetch likes collection up to 3 pages (300 tracks)
+        // Fetch likes collection up to 10 pages (~2,000 tracks)
         let allItems = [];
-        let likesUrl = `https://api-v2.soundcloud.com/users/${userId}/likes?limit=100&client_id=${clientId}`;
+        let likesUrl = `https://api-v2.soundcloud.com/users/${userId}/likes?limit=200&client_id=${clientId}`;
         let page = 1;
-        const maxPages = 3;
+        const maxPages = 10;
 
         while (likesUrl && page <= maxPages) {
           try {
@@ -97,7 +97,31 @@ export default {
             if (!lRes.ok) break;
             const lData = await lRes.json();
             const items = lData.collection || [];
-            allItems = allItems.concat(items);
+            for (const it of items) {
+              const t = it.track;
+              if (!t || typeof t !== "object") continue;
+              const transcodings = t.media?.transcodings || [];
+              const progTc = transcodings.find((tc) => tc.format?.protocol === "progressive")?.url || null;
+              allItems.push({
+                created_at: it.created_at || t.created_at || "",
+                track: {
+                  id: t.id,
+                  title: t.title || "",
+                  created_at: t.created_at || "",
+                  artwork_url: t.artwork_url || "",
+                  permalink_url: t.permalink_url || "",
+                  playback_count: t.playback_count || 0,
+                  user: {
+                    username: t.user?.username || "",
+                    avatar_url: t.user?.avatar_url || "",
+                  },
+                  media: {
+                    transcodings: progTc ? [{ url: progTc, format: { protocol: "progressive" } }] : [],
+                  },
+                },
+              });
+            }
+
             let nextHref = lData.next_href;
             if (nextHref && items.length > 0) {
               if (!nextHref.includes("client_id=")) {
@@ -180,7 +204,13 @@ export default {
           });
         }
 
-        return Response.redirect(streamUrl, 302);
+        return new Response(null, {
+          status: 302,
+          headers: {
+            ...corsHeaders,
+            Location: streamUrl,
+          },
+        });
       } catch (err) {
         return new Response(
           JSON.stringify({ error: err.message || "Failed to resolve stream URL" }),

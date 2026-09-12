@@ -28,6 +28,7 @@
     getAudioContext,
   } from '../lib/audio.js';
   import { isPlaceholderCover, clientArtCache, fetchTrackDetails, fetchTrackPreview } from '../lib/artCache.js';
+  import { resolveSoundCloudStreamUrl } from '../lib/modes/soundcloudEngine.js';
 
   export let onRollComplete = () => {};
 
@@ -54,14 +55,30 @@
 
   function preloadCardAudio(card) {
     if (!card) return;
-    fetchTrackPreview(card).then((pUrl) => {
-      if (pUrl && !preloadedAudioMap.has(pUrl)) {
-        const audio = new Audio();
-        audio.preload = 'auto';
-        audio.src = pUrl;
-        preloadedAudioMap.set(pUrl, audio);
-      }
-    });
+    if (card.source === 'soundcloud' && card.preview_url) {
+      const endpoint = card.stream_proxy_url || card.preview_url;
+      resolveSoundCloudStreamUrl(endpoint).then((directUrl) => {
+        if (directUrl && directUrl !== endpoint) {
+          card.stream_proxy_url = endpoint;
+          card.preview_url = directUrl;
+        }
+        if (directUrl && !preloadedAudioMap.has(directUrl)) {
+          const audio = new Audio();
+          audio.preload = 'auto';
+          audio.src = directUrl;
+          preloadedAudioMap.set(directUrl, audio);
+        }
+      });
+    } else {
+      fetchTrackPreview(card).then((pUrl) => {
+        if (pUrl && !preloadedAudioMap.has(pUrl)) {
+          const audio = new Audio();
+          audio.preload = 'auto';
+          audio.src = pUrl;
+          preloadedAudioMap.set(pUrl, audio);
+        }
+      });
+    }
     if (card.spotify_id && isPlaceholderCover(card)) {
       fetchTrackDetails(card.spotify_id, card.title, card.artist).then((details) => {
         if (details?.album_cover_url) {
@@ -434,6 +451,17 @@
           const preAudio = new Audio();
           preAudio.preload = 'auto';
           preAudio.src = pUrl;
+        }
+      });
+    } else if (winner.source === 'soundcloud' && winner.preview_url) {
+      const endpoint = winner.stream_proxy_url || winner.preview_url;
+      resolveSoundCloudStreamUrl(endpoint).then((directUrl) => {
+        if (directUrl) {
+          winner.stream_proxy_url = endpoint;
+          winner.preview_url = directUrl;
+          const preAudio = new Audio();
+          preAudio.preload = 'auto';
+          preAudio.src = directUrl;
         }
       });
     }

@@ -40,7 +40,7 @@
     declickAudioSeek,
   } from './lib/audio.js';
   import { fetchTrackPreview } from './lib/artCache.js';
-  import { getSoundCloudProxyUrl } from './lib/modes/soundcloudEngine.js';
+  import { getSoundCloudProxyUrl, resolveSoundCloudStreamUrl } from './lib/modes/soundcloudEngine.js';
 
   let windowWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
   let windowHeight = typeof window !== 'undefined' ? window.innerHeight : 768;
@@ -163,11 +163,23 @@
     return url;
   }
 
-  function playArenaAudio(url, startTime = 0, isLoop = false) {
+  async function playArenaAudio(url, startTime = 0, isLoop = false) {
     stopBinderAudio();
     const activeEl = getActiveArenaEl();
     if (!activeEl || !url) return;
-    const targetUrl = resolveAudioUrl(url);
+    let targetUrl = resolveAudioUrl(url);
+
+    if (targetUrl.includes('soundcloud/stream')) {
+      const direct = await resolveSoundCloudStreamUrl(targetUrl);
+      if (direct) {
+        targetUrl = direct;
+        const currentTrack = $activeArenaTrack || $activeWinnerCard;
+        if (currentTrack && currentTrack.source === 'soundcloud') {
+          currentTrack.stream_proxy_url = currentTrack.stream_proxy_url || currentTrack.preview_url;
+          currentTrack.preview_url = direct;
+        }
+      }
+    }
 
     try {
       isArenaBgLooping = isLoop;
@@ -193,7 +205,11 @@
       if (activeEl.src !== targetUrl) {
         activeEl.src = targetUrl;
       }
-      activeEl.currentTime = startTime;
+      if (startTime > 0) {
+        try {
+          activeEl.currentTime = startTime;
+        } catch (e) {}
+      }
       activeEl.play().catch(() => {
         isArenaPlaying.set(false);
         const track = $activeArenaTrack || $activeWinnerCard;
@@ -279,7 +295,9 @@
 
     if (activeEl.paused) {
       stopBinderAudio();
-      if (!activeEl.src || !activeEl.src.includes(track.preview_url)) {
+      const directMatch = track.preview_url && activeEl.src && activeEl.src.includes(track.preview_url);
+      const proxyMatch = track.stream_proxy_url && activeEl.src && activeEl.src.includes(track.stream_proxy_url);
+      if (!activeEl.src || (!directMatch && !proxyMatch)) {
         playArenaAudio(track.preview_url, 0, false);
       } else {
         isArenaBgLooping = false;
@@ -320,6 +338,42 @@
     arenaAudioTime.set({ current: target, duration: dur });
     if (isNaN(dur) || !isFinite(target)) return;
 
+    // If user seeks during post-song lowpass period (and not during active roll), unlowpass and restore full audio
+    if (isArenaBgLooping && !$isSpinning) {
+      isArenaBgLooping = false;
+      isTransitioningToLoop = false;
+      setArenaLowpassFilter(false);
+      clearNudgeTimers();
+
+      const inactiveEl = getInactiveArenaEl();
+      if (inactiveEl) {
+        try {
+          inactiveEl.pause();
+          inactiveEl.currentTime = 0;
+        } catch (e) {}
+      }
+
+      if (activeEl) {
+        if (arenaFadeInterval) {
+          clearInterval(arenaFadeInterval);
+          arenaFadeInterval = null;
+        }
+        if (arenaFadeIntervalB) {
+          clearInterval(arenaFadeIntervalB);
+          arenaFadeIntervalB = null;
+        }
+        if (!activeEl.paused) {
+          if (activeArenaPlayerId === 'A') {
+            arenaFadeInterval = rampAudioVolume(activeEl, 1.0, 300);
+          } else {
+            arenaFadeIntervalB = rampAudioVolume(activeEl, 1.0, 300);
+          }
+        } else {
+          activeEl.volume = 1.0;
+        }
+      }
+    }
+
     if (isExact) {
       pendingArenaSeekRatio = null;
       declickAudioSeek(activeEl, target, true);
@@ -344,7 +398,7 @@
     }
   }
 
-  function playBinderTrack(card) {
+  async function playBinderTrack(card) {
     stopArenaAudio();
     activeBinderTrack.set(card);
     if (!binderAudioEl || !card) {
@@ -365,7 +419,15 @@
       connectMediaElement(binderAudioEl);
       binderAudioEl.pause();
       binderAudioEl.volume = 1;
-      const targetUrl = resolveAudioUrl(card.preview_url);
+      let targetUrl = resolveAudioUrl(card.preview_url);
+      if (targetUrl.includes('soundcloud/stream')) {
+        const direct = await resolveSoundCloudStreamUrl(targetUrl);
+        if (direct) {
+          targetUrl = direct;
+          card.stream_proxy_url = card.stream_proxy_url || card.preview_url;
+          card.preview_url = direct;
+        }
+      }
       if (binderAudioEl.src !== targetUrl) {
         binderAudioEl.src = targetUrl;
       }
@@ -381,7 +443,9 @@
 
     if (binderAudioEl.paused) {
       stopArenaAudio();
-      if (!binderAudioEl.src || !binderAudioEl.src.includes($activeBinderTrack.preview_url)) {
+      const directMatch = $activeBinderTrack.preview_url && binderAudioEl.src && binderAudioEl.src.includes($activeBinderTrack.preview_url);
+      const proxyMatch = $activeBinderTrack.stream_proxy_url && binderAudioEl.src && binderAudioEl.src.includes($activeBinderTrack.stream_proxy_url);
+      if (!binderAudioEl.src || (!directMatch && !proxyMatch)) {
         playBinderTrack($activeBinderTrack);
       } else {
         binderAudioEl.play().catch(() => isBinderPlaying.set(false));
@@ -453,7 +517,9 @@
 
     if (hasPreview) {
       const activeEl = getActiveArenaEl();
-      if (activeEl && !activeEl.paused && activeEl.src && activeEl.src.includes(winner.preview_url)) {
+      const directMatch = winner.preview_url && activeEl.src && activeEl.src.includes(winner.preview_url);
+      const proxyMatch = winner.stream_proxy_url && activeEl.src && activeEl.src.includes(winner.stream_proxy_url);
+      if (activeEl && !activeEl.paused && activeEl.src && (directMatch || proxyMatch)) {
         // Same track is already playing; restore full volume and normal EQ smoothly
         isArenaBgLooping = false;
         setArenaLowpassFilter(false);

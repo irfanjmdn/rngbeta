@@ -1,6 +1,6 @@
 import { appendLog } from '../store.js';
 
-const CACHE_PREFIX = 'crate_soundcloud_cache_v1_';
+const CACHE_PREFIX = 'crate_soundcloud_cache_v2_';
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 function extractSoundCloudUsername(input) {
@@ -60,25 +60,67 @@ export function setSoundCloudProxyUrl(url) {
   }
 }
 
-export async function loadStaticSoundCloudDemoCrate(onEvent) {
-  appendLog('Loading bundled SoundCloud demo crate...', 'info');
-  try {
-    const base = import.meta.env.BASE_URL || '/';
-    const prefix = base.endsWith('/') ? base : `${base}/`;
-    const dataUrl = `${prefix}data/demo_crate_soundcloud.json`;
-    const res = await fetch(dataUrl);
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-    const demoPayload = await res.json();
-    appendLog(`Loaded demo crate: ${demoPayload.tracks.length} tracks (${demoPayload.userId}).`, 'success');
-    appendLog('Crate RNG initialized. Ready to roll!', 'success');
-    await wait(200);
-    onEvent(demoPayload);
-  } catch (err) {
-    appendLog(`Demo load failed: ${err.message}`, 'error');
-    onEvent({ type: 'error', message: err.message });
+const soundcloudDirectStreamCache = new Map();
+
+/**
+ * Resolves a SoundCloud stream endpoint to its direct, signed MP3 CDN URL.
+ * Queries the Cloudflare Worker or local backend with Accept: application/json,
+ * bypassing 302 redirect CORS issues in HTML5 Audio elements.
+ * @param {string} url SoundCloud stream proxy URL or relative API path
+ * @returns {Promise<string>} Direct CDN MP3 URL with CORS and Range support
+ */
+export async function resolveSoundCloudStreamUrl(url) {
+  if (!url) return '';
+  if (url.includes('.sndcdn.com/') || url.includes('.mp3')) {
+    return url;
   }
+
+  const cached = soundcloudDirectStreamCache.get(url);
+  if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+    return cached.directUrl;
+  }
+
+  let targetUrl = url;
+  if (url.startsWith('/api/soundcloud/stream')) {
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      const proxyBase = getSoundCloudProxyUrl();
+      targetUrl = url.replace('/api/soundcloud/stream', `${proxyBase.replace(/\/+$/, '')}/soundcloud/stream`);
+    }
+  }
+
+  try {
+    const res = await fetch(targetUrl, {
+      headers: { Accept: 'application/json' },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.url) {
+        soundcloudDirectStreamCache.set(url, { directUrl: data.url, timestamp: Date.now() });
+        return data.url;
+      }
+    }
+  } catch (err) {
+    console.warn('SoundCloud stream URL resolution error:', err);
+  }
+
+  return targetUrl;
+}
+
+export async function resolveTrackAudioUrl(track) {
+  if (!track) return '';
+  if (track.source !== 'soundcloud') {
+    return track.preview_url || '';
+  }
+  const streamEndpoint = track.stream_proxy_url || track.preview_url;
+  if (!streamEndpoint) return '';
+
+  const directUrl = await resolveSoundCloudStreamUrl(streamEndpoint);
+  if (directUrl && directUrl !== streamEndpoint) {
+    track.stream_proxy_url = streamEndpoint;
+    track.preview_url = directUrl;
+    return directUrl;
+  }
+  return directUrl || streamEndpoint;
 }
 
 function computeSoundCloudTracks(collection, userInfo, clientId, proxyBase) {
@@ -214,6 +256,7 @@ function computeSoundCloudTracks(collection, userInfo, clientId, proxyBase) {
       playlist_uri: '',
       playlist_url: `https://soundcloud.com/${username}/likes`,
       preview_url: t.previewUrl,
+      stream_proxy_url: t.previewUrl,
       uri: t.permalinkUrl,
       spotify_url: t.permalinkUrl,
       source: 'soundcloud',
@@ -353,16 +396,9 @@ export async function loadSoundCloudCrateClient(inputStr, onEvent, forceRefresh 
     onEvent(readyPayload);
   } catch (proxyErr) {
     appendLog(`Cloudflare Worker proxy failed: ${proxyErr.message}`, 'error');
-    
-    // Check if bundled demo crate is available as graceful fallback
-    appendLog('Checking for bundled demo fallback...', 'info');
-    try {
-      await loadStaticSoundCloudDemoCrate(onEvent);
-    } catch (demoErr) {
-      onEvent({
-        type: 'error',
-        message: `SoundCloud load failed: ${proxyErr.message}. Deploy the Cloudflare Worker proxy or run python server.py.`,
-      });
-    }
+    onEvent({
+      type: 'error',
+      message: `SoundCloud load failed: ${proxyErr.message}`,
+    });
   }
 }

@@ -724,10 +724,10 @@ def resolve_soundcloud_profile(username, sse_log_fn=None):
     return client_id, user_info
 
 
-def fetch_soundcloud_likes(user_id, client_id, sse_log_fn=None, max_pages=3):
+def fetch_soundcloud_likes(user_id, client_id, sse_log_fn=None, max_pages=10):
     """Fetch liked tracks from SoundCloud API v2 using cursor pagination."""
     headers = dict(HEADERS)
-    url = f"https://api-v2.soundcloud.com/users/{user_id}/likes?limit=100&client_id={client_id}"
+    url = f"https://api-v2.soundcloud.com/users/{user_id}/likes?limit=200&client_id={client_id}"
     all_items = []
     page = 1
 
@@ -929,7 +929,7 @@ def handle_soundcloud_fetch(profile_url, send_event, log_msg, force_refresh=Fals
         send_event({"type": "error", "message": f"User '{display_name}' does not have any public liked songs."})
         return
 
-    likes_data = fetch_soundcloud_likes(user_id, client_id, sse_log_fn=lambda m, lvl="info": log_msg(m, lvl), max_pages=3)
+    likes_data = fetch_soundcloud_likes(user_id, client_id, sse_log_fn=lambda m, lvl="info": log_msg(m, lvl), max_pages=10)
     if not likes_data:
         send_event({"type": "error", "message": f"No liked tracks could be retrieved for '{display_name}'."})
         return
