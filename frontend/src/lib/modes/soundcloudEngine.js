@@ -1,4 +1,4 @@
-import { appendLog } from '../store.js';
+import { appendLog, crateBuildProgress } from '../store.js';
 
 const CACHE_PREFIX = 'crate_soundcloud_cache_v2_';
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -300,6 +300,7 @@ export async function loadSoundCloudCrateClient(inputStr, onEvent, forceRefresh 
   if (!forceRefresh) {
     const cached = loadCachedCrate(cleanUser);
     if (cached && cached.tracks && cached.tracks.length > 0) {
+      crateBuildProgress.set(100);
       appendLog(`Loaded ${cached.tracks.length} tracks from browser cache for '${cleanUser}'.`, 'success');
       appendLog('Crate RNG initialized. Ready to roll!', 'success');
       onEvent(cached);
@@ -307,6 +308,7 @@ export async function loadSoundCloudCrateClient(inputStr, onEvent, forceRefresh 
     }
   }
 
+  crateBuildProgress.set(15);
   appendLog(`Initiating SoundCloud connection for: ${cleanUser}`, 'info');
 
   // 2. Try local backend server first
@@ -384,7 +386,9 @@ export async function loadSoundCloudCrateClient(inputStr, onEvent, forceRefresh 
       throw new Error(`No liked songs found on SoundCloud profile '${cleanUser}'.`);
     }
 
+    crateBuildProgress.set(65);
     appendLog(`Retrieved ${scData.collection.length} liked tracks. Compiling crate library...`, 'success');
+    crateBuildProgress.set(90);
     const readyPayload = computeSoundCloudTracks(scData.collection, scData.user || {}, scData.client_id, proxyBase);
 
     saveCachedCrate(cleanUser, readyPayload);

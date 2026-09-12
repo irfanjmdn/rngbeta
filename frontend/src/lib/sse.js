@@ -6,6 +6,7 @@ import {
   debugStatus,
   isBuildingCrate,
   isCrateReady,
+  crateBuildProgress,
   appendLog,
   loadUserData,
   activeWinnerCard,
@@ -31,11 +32,38 @@ export function createSseHandler(mode, inputStr = '') {
   return function handleSseEvent(ev) {
     if (ev.type === 'log') {
       appendLog(ev.message, ev.level, ev.time);
+      if (ev.progress !== undefined) {
+        crateBuildProgress.set(ev.progress);
+      } else if (ev.message) {
+        const m = ev.message;
+        const match = m.match(/\[(\d+)\/(\d+)\]/);
+        if (match) {
+          const cur = parseInt(match[1], 10);
+          const tot = parseInt(match[2], 10);
+          if (tot > 0) {
+            crateBuildProgress.update((p) => Math.max(p, Math.round(25 + (cur / tot) * 60)));
+          }
+        } else if (m.includes('Resolving') || m.includes('Connecting') || m.includes('Scanning')) {
+          crateBuildProgress.update((p) => Math.max(p, 20));
+        } else if (m.includes('Found') || m.includes('Discovered') || m.includes('Loaded')) {
+          crateBuildProgress.update((p) => Math.max(p, 40));
+        } else if (m.includes('timeline') || m.includes('Sampling')) {
+          crateBuildProgress.update((p) => Math.max(p, 55));
+        } else if (m.includes('Compiling') || m.includes('Calculating') || m.includes('Rarity') || m.includes('Analyzing')) {
+          crateBuildProgress.update((p) => Math.max(p, 90));
+        }
+      }
+    } else if (ev.type === 'progress') {
+      if (ev.progress !== undefined) {
+        crateBuildProgress.set(ev.progress);
+      }
     } else if (ev.type === 'error') {
       appendLog(`Error: ${ev.message}`, 'error');
       debugStatus.set('error');
       isBuildingCrate.set(false);
+      crateBuildProgress.set(0);
     } else if (ev.type === 'ready') {
+      crateBuildProgress.set(100);
       debugStatus.set('success');
       isBuildingCrate.set(false);
 
@@ -84,6 +112,7 @@ export function createSseHandler(mode, inputStr = '') {
 export async function fetchAndBuildCrate(inputStr, mode = 'lastfm', forceRefresh = false) {
   getAudioContext();
   isBuildingCrate.set(true);
+  crateBuildProgress.set(8);
   debugStatus.set('active');
   activeMode.set(mode);
 

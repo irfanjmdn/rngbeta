@@ -4,6 +4,7 @@
     debugStatus,
     isBuildingCrate,
     isCrateReady,
+    crateBuildProgress,
     recentProfiles,
     removeRecentProfile,
     clearRecentProfiles,
@@ -226,7 +227,7 @@
               {@const profileKey = `${profile.mode}:${profile.fetchTarget || profile.userId}`}
               {@const isThisLoading = activeLoadingProfileKey === profileKey && $isBuildingCrate}
               <div
-                class="recent-profile-card {isThisLoading ? 'is-loading' : ''} {$isBuildingCrate && !isThisLoading ? 'is-disabled' : ''}"
+                class="recent-profile-card {isThisLoading ? 'is-loading' : ''} {$isBuildingCrate && !isThisLoading ? 'is-disabled' : ''} platform-{profile.mode}"
                 role="button"
                 tabindex="0"
                 on:click={() => handleSelectRecent(profile)}
@@ -239,6 +240,15 @@
                 aria-label="Load {profile.displayName || profile.userId} on {profile.mode === 'lastfm' ? 'Last.fm' : (profile.mode === 'soundcloud' ? 'SoundCloud' : 'Spotify')}"
                 aria-busy={isThisLoading}
               >
+                <!-- Horizontal Progress Bar covering entire profile card bg -->
+                {#if isThisLoading}
+                  <div
+                    class="recent-card-progress-bar platform-{profile.mode}"
+                    style="width: {Math.max(6, $crateBuildProgress)}%;"
+                    aria-hidden="true"
+                  ></div>
+                {/if}
+
                 <!-- Avatar / Spinner -->
                 <div class="recent-avatar-wrap">
                   {#if isThisLoading}
@@ -282,9 +292,7 @@
                 <span class="recent-profile-name">{profile.displayName || profile.userId}</span>
 
                 <!-- Status / Track Count -->
-                {#if isThisLoading}
-                  <span class="recent-loading-text">LOADING...</span>
-                {:else if profile.tracksCount > 0}
+                {#if profile.tracksCount > 0}
                   <span class="recent-profile-count">{profile.tracksCount} tracks</span>
                 {/if}
 

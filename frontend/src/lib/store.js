@@ -55,6 +55,7 @@ export const debugLogs = writable([
 export const debugStatus = writable('idle'); // 'idle' | 'active' | 'success' | 'error'
 export const isBuildingCrate = writable(false);
 export const isCrateReady = writable(false);
+export const crateBuildProgress = writable(0);
 export const isLoggingOut = writable(false);
 
 export const activeModal = writable(null); // 'binder' | 'rates' | 'settings' | null

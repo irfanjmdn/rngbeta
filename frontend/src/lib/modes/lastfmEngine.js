@@ -1,4 +1,4 @@
-import { appendLog } from '../store.js';
+import { appendLog, crateBuildProgress } from '../store.js';
 
 const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 
@@ -122,6 +122,7 @@ export async function loadLastfmCrateClient(username, onEvent, forceRefresh = fa
   if (!forceRefresh) {
     const cached = loadCachedCrate(username);
     if (cached && cached.tracks && cached.tracks.length > 0) {
+      crateBuildProgress.set(100);
       appendLog(`Loaded ${cached.tracks.length} tracks from browser cache for '${username}'.`, 'success');
       appendLog('Crate RNG initialized. Ready to roll!', 'success');
       onEvent(cached);
@@ -129,6 +130,7 @@ export async function loadLastfmCrateClient(username, onEvent, forceRefresh = fa
     }
   }
 
+  crateBuildProgress.set(15);
   const keys = getApiKeyPool();
   appendLog(`Connecting to Last.fm API for user '${username}' (using ${keys.length}-key pool)...`, 'info');
 
@@ -136,6 +138,7 @@ export async function loadLastfmCrateClient(username, onEvent, forceRefresh = fa
   let displayName = username;
   try {
     const uData = await requestLastfm('user.getinfo', { user: username }, keys);
+    crateBuildProgress.set(25);
     if (uData && uData.user) {
       displayName = uData.user.name || username;
       const imgs = uData.user.image || [];
@@ -165,6 +168,7 @@ export async function loadLastfmCrateClient(username, onEvent, forceRefresh = fa
     }
     rawScrobbles.push(...p1Batch);
 
+    crateBuildProgress.set(38);
     const totalPages = parseInt(p1Data.recenttracks?.['@attr']?.totalPages || '1', 10);
     const totalScrobbles = parseInt(p1Data.recenttracks?.['@attr']?.total || String(p1Batch.length), 10);
     appendLog(`Found ${totalScrobbles.toLocaleString()} all-time scrobbles across ${totalPages} pages.`, 'info');
@@ -188,12 +192,14 @@ export async function loadLastfmCrateClient(username, onEvent, forceRefresh = fa
 
     if (extraPages.length > 0) {
       appendLog(`Sampling listening timeline across pages: ${extraPages.join(', ')}...`, 'info');
-      for (const pageNum of extraPages) {
+      for (let pageIdx = 0; pageIdx < extraPages.length; pageIdx++) {
+        const pageNum = extraPages[pageIdx];
         await wait(300);
         try {
           const data = await requestLastfm('user.getrecenttracks', { user: username, limit: '200', page: pageNum.toString() }, keys);
           const batch = extractTracks(data);
           rawScrobbles.push(...batch);
+          crateBuildProgress.set(Math.round(38 + ((pageIdx + 1) / extraPages.length) * 48));
         } catch (pageErr) {
           appendLog(`Notice sampling page ${pageNum}: ${pageErr.message}`, 'warning');
         }
@@ -240,6 +246,7 @@ export async function loadLastfmCrateClient(username, onEvent, forceRefresh = fa
     uniqueTracks.sort((a, b) => a.lastPlayedUts - b.lastPlayedUts);
 
     appendLog(`Compiled ${uniqueTracks.length} unique tracks from listening history.`, 'success');
+    crateBuildProgress.set(92);
     appendLog('Calculating rarity: oldest played = Mythic, newest played = Common...', 'info');
 
     const total = uniqueTracks.length;
