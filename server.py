@@ -1313,6 +1313,16 @@ class CrateRngServerHandler(http.server.SimpleHTTPRequestHandler):
 
         super().do_GET()
 
+    def end_headers(self):
+        if hasattr(self, "path"):
+            if self.path in ("/sw.js", "/sw.js/"):
+                self.send_header("Service-Worker-Allowed", "/")
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            elif self.path in ("/manifest.webmanifest", "/manifest.json"):
+                self.send_header("Content-Type", "application/manifest+json")
+                self.send_header("Cache-Control", "public, max-age=3600")
+        super().end_headers()
+
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")

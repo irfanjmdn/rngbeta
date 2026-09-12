@@ -1,29 +1,54 @@
 {
+  "id": "/",
   "name": "Track RNG",
   "short_name": "Track RNG",
   "description": "Dynamic collectible track slot machine and music rarity RNG",
   "start_url": "/",
   "scope": "/",
-  "display": "standalone",
-  "background_color": "#0A0D14",
-  "theme_color": "#0A0D14",
+  "display": "fullscreen",
+  "display_override": [
+    "fullscreen",
+    "standalone",
+    "window-controls-overlay"
+  ],
+  "background_color": "#080B11",
+  "theme_color": "#080B11",
   "orientation": "portrait",
+  "categories": [
+    "games",
+    "music",
+    "entertainment"
+  ],
   "icons": [
     {
       "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/pwa-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/pwa-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
